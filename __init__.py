@@ -1,1 +1,0 @@
-name = "thunder_remote"

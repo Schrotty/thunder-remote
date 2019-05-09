@@ -1,7 +1,7 @@
 import os
 import csv
 import threading
-import ControllerMapping
+from thunder_remote import ControllerMapping
 from inputs import devices, get_gamepad
 from RemoteControlEvents import RemoteControlEvents
 
