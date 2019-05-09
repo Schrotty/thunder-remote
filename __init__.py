@@ -1,1 +1,1 @@
-name = "MonsterBorgRemote"
+name = "thunder_remote"
