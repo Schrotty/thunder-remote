@@ -57,6 +57,16 @@ class RemoteControl:
         self.remote_online = False
         self.thread.join()
 
+    def percent_value(self, state):
+        if state == 0:
+            return 1.0
+
+        i = ((100.0 / 255) * state) / 100
+        if state > 128:
+            return i * -1
+
+        return i
+
     def load_profile(self):
         try:
 
@@ -128,9 +138,6 @@ class RemoteControl:
 
     def is_available(self):
         return self.remote_found
-
-    def calc_stick_percent(self, full, state):
-        return (100.0 / full) * state
 
     def control(self):
         prev_cross_state = None
@@ -248,37 +255,29 @@ class RemoteControl:
                     if code in ControllerMapping.STICK_LEFT_X:
 
                         # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_left_x(code, self.calc_stick_percent(ControllerMapping.STICK_L_MAX, state))
+                        self.events.on_stick_left_x(code, state)
 
                         # MOVEMENT EAST
-                        if state > ControllerMapping.STICK_L_DEAD:
-                            self.events.on_stick_left_east(code, self.calc_stick_percent(ControllerMapping.STICK_L_MAX, state))
-                        elif state > 0:
-                            self.events.on_stick_left_east(code, 0)
+                        if state >= ControllerMapping.STICK_CENTER:
+                            self.events.on_stick_left_east(code, self.percent_value(state))
 
                         # MOVEMENT WEST
-                        if state < ControllerMapping.STICK_L_DEAD * -1:
-                            self.events.on_stick_left_west(code, self.calc_stick_percent(ControllerMapping.STICK_L_MIN, state))
-                        elif state < 0:
-                            self.events.on_stick_left_west(code, 0)
+                        if state < 255:
+                            self.events.on_stick_left_west(code, self.percent_value(state))
 
                     # Y-AXIS
                     if code in ControllerMapping.STICK_LEFT_Y:
 
                         # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_left_y(code, self.calc_stick_percent(ControllerMapping.STICK_L_MAX, state))
+                        self.events.on_stick_left_y(code, state)
 
                         # MOVEMENT NORTH
-                        if state > ControllerMapping.STICK_L_DEAD:
-                            self.events.on_stick_left_north(code, self.calc_stick_percent(ControllerMapping.STICK_L_MAX, state))
-                        elif state > 0:
-                            self.events.on_stick_left_north(code, 0)
+                        if state >= ControllerMapping.STICK_CENTER:
+                            self.events.on_stick_left_north(code, self.percent_value(state))
 
                         # MOVEMENT SOUTH
-                        if state < ControllerMapping.STICK_L_DEAD * -1:
-                            self.events.on_stick_left_south(code, self.calc_stick_percent(ControllerMapping.STICK_L_MIN, state))
-                        elif state < 0:
-                            self.events.on_stick_left_south(code, 0)
+                        if state < 255:
+                            self.events.on_stick_left_south(code, self.percent_value(state))
 
                 # RIGHT STICK
                 if code in ControllerMapping.STICK_RIGHT_X or code in ControllerMapping.STICK_RIGHT_Y:
@@ -290,34 +289,26 @@ class RemoteControl:
                     if code in ControllerMapping.STICK_RIGHT_X:
 
                         # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_right_x(code, self.calc_stick_percent(ControllerMapping.STICK_R_MAX, state))
+                        self.events.on_stick_right_x(code, state)
 
                         # MOVEMENT EAST
-                        if state > ControllerMapping.STICK_R_DEAD:
-                            self.events.on_stick_right_east(code, self.calc_stick_percent(ControllerMapping.STICK_R_MAX, state))
-                        elif state > 0:
-                            self.events.on_stick_right_east(code, 0)
+                        if state >= ControllerMapping.STICK_CENTER:
+                            self.events.on_stick_right_east(code, self.percent_value(state))
 
                         # MOVEMENT WEST
-                        if state < ControllerMapping.STICK_R_DEAD * -1:
-                            self.events.on_stick_right_west(code, self.calc_stick_percent(ControllerMapping.STICK_R_MIN, state))
-                        elif state < 0:
-                            self.events.on_stick_right_east(code, 0)
+                        if state < 255:
+                            self.events.on_stick_right_west(code, self.percent_value(state))
 
                     # Y-AXIS
                     if code in ControllerMapping.STICK_RIGHT_Y:
 
                         # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_right_y(code, self.calc_stick_percent(ControllerMapping.STICK_R_MAX, state))
+                        self.events.on_stick_right_y(code, state)
 
                         # MOVEMENT NORTH
-                        if state > ControllerMapping.STICK_R_DEAD:
-                            self.events.on_stick_right_north(code, self.calc_stick_percent(ControllerMapping.STICK_R_MAX, state))
-                        elif state > 0:
-                            self.events.on_stick_right_north(code, 0)
+                        if state >= ControllerMapping.STICK_CENTER:
+                            self.events.on_stick_right_north(code, self.percent_value(state))
 
                         # MOVEMENT SOUTH
-                        if state < ControllerMapping.STICK_R_DEAD * -1:
-                            self.events.on_stick_right_south(code, self.calc_stick_percent(ControllerMapping.STICK_R_MIN, state))
-                        elif state < 0:
-                            self.events.on_stick_right_south(code, 0)
+                        if state < 255:
+                            self.events.on_stick_right_south(code, self.percent_value(state))
