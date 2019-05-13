@@ -58,14 +58,15 @@ class RemoteControl:
         self.thread.join()
 
     def percent_value(self, state):
-        if state == 0:
-            return 1.0
+        max_val = 0
+        min_val = 128.0
 
-        i = ((100.0 / 255) * state) / 100
-        if state > 128:
-            return i * -1
+        if 255 >= state > 128:
+            max_val = 255.0
+            min_val = 128.0
 
-        return i
+        val = round((state - min_val) / (max_val - min_val), 2)
+        return val * -1 if state >= 128 else val
 
     def load_profile(self):
         try:
@@ -255,7 +256,7 @@ class RemoteControl:
                     if code in ControllerMapping.STICK_LEFT_X:
 
                         # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_left_x(code, state)
+                        self.events.on_stick_left_x(code, self.percent_value(state))
 
                         # MOVEMENT EAST
                         if state >= ControllerMapping.STICK_CENTER:
@@ -269,7 +270,7 @@ class RemoteControl:
                     if code in ControllerMapping.STICK_LEFT_Y:
 
                         # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_left_y(code, state)
+                        self.events.on_stick_left_y(code, self.percent_value(state))
 
                         # MOVEMENT NORTH
                         if state >= ControllerMapping.STICK_CENTER:
@@ -289,7 +290,7 @@ class RemoteControl:
                     if code in ControllerMapping.STICK_RIGHT_X:
 
                         # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_right_x(code, state)
+                        self.events.on_stick_right_x(code, self.percent_value(state))
 
                         # MOVEMENT EAST
                         if state >= ControllerMapping.STICK_CENTER:
@@ -303,7 +304,7 @@ class RemoteControl:
                     if code in ControllerMapping.STICK_RIGHT_Y:
 
                         # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_right_y(code, state)
+                        self.events.on_stick_right_y(code, self.percent_value(state))
 
                         # MOVEMENT NORTH
                         if state >= ControllerMapping.STICK_CENTER:
