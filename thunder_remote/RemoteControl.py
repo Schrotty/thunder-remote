@@ -7,7 +7,7 @@ from RemoteControlEvents import RemoteControlEvents
 
 
 class RemoteControl:
-    def __init__(self, profile="default", debug_mode=False):
+    def __init__(self, profile="default", debug_mode=False, with_thread=False):
         self.events = RemoteControlEvents()
 
         self.tries_loading_profile = 1
@@ -18,6 +18,7 @@ class RemoteControl:
         self.remote_online = False
         self.debug_mode = debug_mode
         self.profile_loaded = False
+        self.with_thread = with_thread
 
         print "> INIT REMOTE CONTROL"
         print "> Looking for gamepad..."
@@ -45,15 +46,24 @@ class RemoteControl:
 
     def start(self):
         if self.remote_online:
+            if not self.with_thread:
+                print "> Running in no thread mode"
+                self.control()
+
             print "> Remote control already running!"
         else:
             self.remote_online = True
-            self.thread = threading.Thread(target=self.control, args=())
+            self.thread = threading.Thread(target=self.control, args=(), daemon=True)
             self.thread.start()
 
         return self.remote_online
 
     def stop(self):
+        print "> Stop remote control"
+        if not self.with_thread:
+            self.remote_online = False
+            return
+
         self.remote_online = False
         self.thread.join()
 
