@@ -46,25 +46,24 @@ class RemoteControl:
 
     def start(self):
         if self.remote_online:
+            print "> Remote control already running!"
+        else:
+            self.remote_online = True
             if not self.with_thread:
                 print "> Running in no thread mode"
                 self.control()
 
-            print "> Remote control already running!"
-        else:
-            self.remote_online = True
             self.thread = threading.Thread(target=self.control, args=(), daemon=True)
             self.thread.start()
 
         return self.remote_online
 
     def stop(self):
+        self.remote_online = False
         print "> Stop remote control"
         if not self.with_thread:
-            self.remote_online = False
             return
 
-        self.remote_online = False
         self.thread.join()
 
     def percent_value(self, state):
