@@ -7,13 +7,14 @@ from RemoteControlEvents import RemoteControlEvents
 
 
 class RemoteControl:
-    def __init__(self, profile="default", debug_mode=False, with_thread=False):
+    def __init__(self, profile="default", debug_mode=False, with_thread=True):
         self.events = RemoteControlEvents()
 
         self.tries_loading_profile = 1
         self.profile = profile
         self.controller_name = "Unknown"
         self.thread = None
+        self.alarm_clock = None
         self.remote_found = True
         self.remote_online = False
         self.debug_mode = debug_mode
@@ -45,24 +46,30 @@ class RemoteControl:
         else:
             print "> Remote control is unavailable!"
 
-    def start(self):
+    def activate(self):
         if self.remote_online:
             print "> Remote control already running!"
         else:
             self.remote_online = True
             if not self.with_thread:
-                print "> Running in no thread mode"
-                self.control()
+                print "> Running in main thread"
+            else:
+                self.thread = threading.Thread(target=self.control, args=())
+                self.thread.start()
 
-            self.thread = threading.Thread(target=self.control, args=())
-            self.thread.start()
+            self.alarm_clock = threading.Thread(target=self.clock, args=())
+            self.alarm_clock.start()
 
-        return self.remote_online
+            self.is_sleeping = True
+
+    def wake(self):
+        if not self.with_thread:
+            self.control()
 
     def sleep(self):
         self.is_sleeping = True
 
-    def stop(self):
+    def deactivate(self):
         self.remote_online = False
         print "> Stop remote control"
         if not self.with_thread:
@@ -94,7 +101,6 @@ class RemoteControl:
                 reader = csv.DictReader(csvFile)
 
                 for profile in reader:
-
                     # CONTROLLER NAME
                     self.controller_name = profile['CONTROLLER']
 
@@ -331,7 +337,13 @@ class RemoteControl:
                             # MOVEMENT SOUTH
                             if state < 255:
                                 self.events.on_stick_right_south(code, self.percent_value(state))
-            else:
+
+    def clock(self):
+        events = get_gamepad()
+
+        while self.remote_online:
+            if self.is_sleeping:
                 for _ in events:
-                    if _.code in ControllerMapping.START:
+                    print ">", _.code
+                    if _.code in ControllerMapping.WAKE_UP:
                         self.events.wake_up(_.code, _.state)
