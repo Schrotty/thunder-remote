@@ -173,4 +173,4 @@ fabric.properties
 
 /RemoteControlTest.py
 /.idea/
-/create_package.bat
+*.bat

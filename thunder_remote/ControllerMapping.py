@@ -23,6 +23,8 @@ SHOULDR_L = []
 SELECT = []
 START = []
 
+WAKE_UP = []
+
 STICK_L_MAX = 0
 STICK_L_MIN = 0
 STICK_R_MAX = 0

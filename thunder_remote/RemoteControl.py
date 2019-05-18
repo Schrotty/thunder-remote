@@ -19,6 +19,7 @@ class RemoteControl:
         self.debug_mode = debug_mode
         self.profile_loaded = False
         self.with_thread = with_thread
+        self.is_sleeping = False
 
         print "> INIT REMOTE CONTROL"
         print "> Looking for gamepad..."
@@ -53,10 +54,13 @@ class RemoteControl:
                 print "> Running in no thread mode"
                 self.control()
 
-            self.thread = threading.Thread(target=self.control, args=(), daemon=True)
+            self.thread = threading.Thread(target=self.control, args=())
             self.thread.start()
 
         return self.remote_online
+
+    def sleep(self):
+        self.is_sleeping = True
 
     def stop(self):
         self.remote_online = False
@@ -124,6 +128,9 @@ class RemoteControl:
                     ControllerMapping.THUMB_R = profile['THUMB_R']
                     ControllerMapping.THUMB_L = profile['THUMB_L']
 
+                    # WAKE UP
+                    ControllerMapping.WAKE_UP = profile['WAKE_UP']
+
                     # STICK VALUES
                     ControllerMapping.STICK_CENTER = int(profile['STICK_CENTER'])
                     ControllerMapping.STICK_L_MAX = int(profile['STICK_L_MAX'])
@@ -154,171 +161,177 @@ class RemoteControl:
 
         while self.remote_online:
             events = get_gamepad()
-            for event in events:
-                code = event.code
-                state = event.state
 
-                if self.debug_mode:
-                    self.events.on_any(code, state)
+            if not self.is_sleeping:
+                for event in events:
+                    code = event.code
+                    state = event.state
 
-                # BUTTON RELEASED
-                if state == 0:
+                    if self.debug_mode:
+                        self.events.on_any(code, state)
 
-                    # RIGHT BUTTONS
-                    if code in ControllerMapping.BTN_NORTH:
-                        self.events.on_north(code, state)
+                    # BUTTON RELEASED
+                    if state == 0:
 
-                    if code in ControllerMapping.BTN_EAST:
-                        self.events.on_east(code, state)
+                        # RIGHT BUTTONS
+                        if code in ControllerMapping.BTN_NORTH:
+                            self.events.on_north(code, state)
 
-                    if code in ControllerMapping.BTN_SOUTH:
-                        self.events.on_south(code, state)
+                        if code in ControllerMapping.BTN_EAST:
+                            self.events.on_east(code, state)
 
-                    if code in ControllerMapping.BTN_WEST:
-                        self.events.on_west(code, state)
+                        if code in ControllerMapping.BTN_SOUTH:
+                            self.events.on_south(code, state)
 
-                    # START AND SELECT
-                    if code in ControllerMapping.START:
-                        self.events.on_start(code, state)
+                        if code in ControllerMapping.BTN_WEST:
+                            self.events.on_west(code, state)
 
-                    if code in ControllerMapping.SELECT:
-                        self.events.on_select(code, state)
+                        # START AND SELECT
+                        if code in ControllerMapping.START:
+                            self.events.on_start(code, state)
 
-                # CONTROLLER CROSS
-                if code in ControllerMapping.CROSS_Y or code in ControllerMapping.CROSS_X:
+                        if code in ControllerMapping.SELECT:
+                            self.events.on_select(code, state)
 
-                    # CROSS NORTH AND SOUTH
-                    if code in ControllerMapping.CROSS_Y:
-                        if state == -1:
-                            self.events.on_cross_north_p(code, state)
-                            prev_cross_state = -1
+                    # CONTROLLER CROSS
+                    if code in ControllerMapping.CROSS_Y or code in ControllerMapping.CROSS_X:
 
-                        if state == 1:
-                            self.events.on_cross_south_p(code, state)
-                            prev_cross_state = 1
+                        # CROSS NORTH AND SOUTH
+                        if code in ControllerMapping.CROSS_Y:
+                            if state == -1:
+                                self.events.on_cross_north_p(code, state)
+                                prev_cross_state = -1
 
-                        if state == 0:
-                            if prev_cross_state == 1:
-                                self.events.on_cross_south_r(code, state)
-                            else:
-                                self.events.on_cross_north_r(code, state)
+                            if state == 1:
+                                self.events.on_cross_south_p(code, state)
+                                prev_cross_state = 1
 
-                    # CROSS WEST AND EAST
-                    if code in ControllerMapping.CROSS_X:
-                        if state == -1:
-                            self.events.on_cross_west_p(code, state)
-                            prev_cross_state = -1
+                            if state == 0:
+                                if prev_cross_state == 1:
+                                    self.events.on_cross_south_r(code, state)
+                                else:
+                                    self.events.on_cross_north_r(code, state)
 
-                        if state == 1:
-                            self.events.on_cross_east_p(code, state)
-                            prev_cross_state = 1
+                        # CROSS WEST AND EAST
+                        if code in ControllerMapping.CROSS_X:
+                            if state == -1:
+                                self.events.on_cross_west_p(code, state)
+                                prev_cross_state = -1
 
-                        if state == 0:
-                            if prev_cross_state == 1:
-                                self.events.on_cross_east_r(code, state)
-                            else:
-                                self.events.on_cross_west_r(code, state)
+                            if state == 1:
+                                self.events.on_cross_east_p(code, state)
+                                prev_cross_state = 1
 
-                # TRIGGERS
-                if code in ControllerMapping.TRIGGER_L or code in ControllerMapping.TRIGGER_R:
+                            if state == 0:
+                                if prev_cross_state == 1:
+                                    self.events.on_cross_east_r(code, state)
+                                else:
+                                    self.events.on_cross_west_r(code, state)
 
-                    # LEFT TRIGGER
-                    if code in ControllerMapping.TRIGGER_L:
-                        self.events.on_trigger_left(code, state)
+                    # TRIGGERS
+                    if code in ControllerMapping.TRIGGER_L or code in ControllerMapping.TRIGGER_R:
 
-                    # RIGHT TRIGGER
-                    if code in ControllerMapping.TRIGGER_R:
-                        self.events.on_trigger_right(code, state)
+                        # LEFT TRIGGER
+                        if code in ControllerMapping.TRIGGER_L:
+                            self.events.on_trigger_left(code, state)
 
-                # SHOULDERS
-                if code in ControllerMapping.SHOULDR_L or code in ControllerMapping.SHOULDR_R:
+                        # RIGHT TRIGGER
+                        if code in ControllerMapping.TRIGGER_R:
+                            self.events.on_trigger_right(code, state)
 
-                    # LEFT SHOULDER
-                    if code in ControllerMapping.SHOULDR_L:
+                    # SHOULDERS
+                    if code in ControllerMapping.SHOULDR_L or code in ControllerMapping.SHOULDR_R:
 
-                        # ON RELEASE
-                        if state == 0:
-                            self.events.on_shoulder_left_r(code, state)
+                        # LEFT SHOULDER
+                        if code in ControllerMapping.SHOULDR_L:
 
-                        # WHEN PRESSED
-                        if state == 1:
-                            self.events.on_shoulder_left_p(code, state)
+                            # ON RELEASE
+                            if state == 0:
+                                self.events.on_shoulder_left_r(code, state)
 
-                    # RIGHT SHOULDER
-                    if code in ControllerMapping.SHOULDR_R:
+                            # WHEN PRESSED
+                            if state == 1:
+                                self.events.on_shoulder_left_p(code, state)
 
-                        # ON RELEASE
-                        if state == 0:
-                            self.events.on_shoulder_right_r(code, state)
+                        # RIGHT SHOULDER
+                        if code in ControllerMapping.SHOULDR_R:
 
-                        # WHEN PRESSED
-                        if state == 1:
-                            self.events.on_shoulder_right_p(code, state)
+                            # ON RELEASE
+                            if state == 0:
+                                self.events.on_shoulder_right_r(code, state)
 
-                # LEFT STICK
-                if code in ControllerMapping.STICK_LEFT_X or code in ControllerMapping.STICK_LEFT_Y:
+                            # WHEN PRESSED
+                            if state == 1:
+                                self.events.on_shoulder_right_p(code, state)
 
-                    # ANY MOVEMENT
-                    self.events.on_stick_left(code, state)
+                    # LEFT STICK
+                    if code in ControllerMapping.STICK_LEFT_X or code in ControllerMapping.STICK_LEFT_Y:
 
-                    # X-AXIS
-                    if code in ControllerMapping.STICK_LEFT_X:
+                        # ANY MOVEMENT
+                        self.events.on_stick_left(code, state)
 
-                        # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_left_x(code, self.percent_value(state))
+                        # X-AXIS
+                        if code in ControllerMapping.STICK_LEFT_X:
 
-                        # MOVEMENT EAST
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_left_east(code, self.percent_value(state))
+                            # ANY X-AXIS MOVEMENT
+                            self.events.on_stick_left_x(code, self.percent_value(state))
 
-                        # MOVEMENT WEST
-                        if state < 255:
-                            self.events.on_stick_left_west(code, self.percent_value(state))
+                            # MOVEMENT EAST
+                            if state >= ControllerMapping.STICK_CENTER:
+                                self.events.on_stick_left_east(code, self.percent_value(state))
 
-                    # Y-AXIS
-                    if code in ControllerMapping.STICK_LEFT_Y:
+                            # MOVEMENT WEST
+                            if state < 255:
+                                self.events.on_stick_left_west(code, self.percent_value(state))
 
-                        # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_left_y(code, self.percent_value(state))
+                        # Y-AXIS
+                        if code in ControllerMapping.STICK_LEFT_Y:
 
-                        # MOVEMENT NORTH
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_left_north(code, self.percent_value(state))
+                            # ANY Y-AXIS MOVEMENT
+                            self.events.on_stick_left_y(code, self.percent_value(state))
 
-                        # MOVEMENT SOUTH
-                        if state < 255:
-                            self.events.on_stick_left_south(code, self.percent_value(state))
+                            # MOVEMENT NORTH
+                            if state >= ControllerMapping.STICK_CENTER:
+                                self.events.on_stick_left_north(code, self.percent_value(state))
 
-                # RIGHT STICK
-                if code in ControllerMapping.STICK_RIGHT_X or code in ControllerMapping.STICK_RIGHT_Y:
+                            # MOVEMENT SOUTH
+                            if state < 255:
+                                self.events.on_stick_left_south(code, self.percent_value(state))
 
-                    # ANY MOVEMENT
-                    self.events.on_stick_right(code, state)
+                    # RIGHT STICK
+                    if code in ControllerMapping.STICK_RIGHT_X or code in ControllerMapping.STICK_RIGHT_Y:
 
-                    # X-AXIS
-                    if code in ControllerMapping.STICK_RIGHT_X:
+                        # ANY MOVEMENT
+                        self.events.on_stick_right(code, state)
 
-                        # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_right_x(code, self.percent_value(state))
+                        # X-AXIS
+                        if code in ControllerMapping.STICK_RIGHT_X:
 
-                        # MOVEMENT EAST
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_right_east(code, self.percent_value(state))
+                            # ANY X-AXIS MOVEMENT
+                            self.events.on_stick_right_x(code, self.percent_value(state))
 
-                        # MOVEMENT WEST
-                        if state < 255:
-                            self.events.on_stick_right_west(code, self.percent_value(state))
+                            # MOVEMENT EAST
+                            if state >= ControllerMapping.STICK_CENTER:
+                                self.events.on_stick_right_east(code, self.percent_value(state))
 
-                    # Y-AXIS
-                    if code in ControllerMapping.STICK_RIGHT_Y:
+                            # MOVEMENT WEST
+                            if state < 255:
+                                self.events.on_stick_right_west(code, self.percent_value(state))
 
-                        # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_right_y(code, self.percent_value(state))
+                        # Y-AXIS
+                        if code in ControllerMapping.STICK_RIGHT_Y:
 
-                        # MOVEMENT NORTH
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_right_north(code, self.percent_value(state))
+                            # ANY Y-AXIS MOVEMENT
+                            self.events.on_stick_right_y(code, self.percent_value(state))
 
-                        # MOVEMENT SOUTH
-                        if state < 255:
-                            self.events.on_stick_right_south(code, self.percent_value(state))
+                            # MOVEMENT NORTH
+                            if state >= ControllerMapping.STICK_CENTER:
+                                self.events.on_stick_right_north(code, self.percent_value(state))
+
+                            # MOVEMENT SOUTH
+                            if state < 255:
+                                self.events.on_stick_right_south(code, self.percent_value(state))
+            else:
+                for _ in events:
+                    if _.code in ControllerMapping.START:
+                        self.events.wake_up(_.code, _.state)
