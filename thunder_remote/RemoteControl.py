@@ -4,24 +4,25 @@ import threading
 from thunder_remote import ControllerMapping
 from inputs import devices, get_gamepad
 from RemoteControlEvents import RemoteControlEvents
+from thunder_remote.AlarmClock import AlarmClock
 
 
 class RemoteControl:
-    def __init__(self, profile="default", debug_mode=False, with_thread=True, profiles_path='profiles'):
+    def __init__(self, profile="default", debug_mode=False, with_thread=True, profiles_path='profiles', start_sleeping=False):
         self.events = RemoteControlEvents()
 
         self.tries_loading_profile = 1
         self.profile = profile
         self.controller_name = "Unknown"
         self.thread = None
-        self.alarm_clock = None
         self.remote_found = True
         self.remote_online = False
         self.debug_mode = debug_mode
         self.profile_loaded = False
         self.with_thread = with_thread
         self.is_sleeping = False
-        self.profiles_path=profiles_path
+        self.profiles_path = profiles_path
+        self.start_sleeping = start_sleeping
 
         print "> INIT REMOTE CONTROL"
         print "> Looking for gamepad..."
@@ -49,26 +50,32 @@ class RemoteControl:
 
     def activate(self):
         if self.remote_online:
-            print "> Remote control already running!"
+            print "> Remote control already activated!"
         else:
             self.remote_online = True
             if not self.with_thread:
                 print "> Running in main thread"
             else:
                 self.thread = threading.Thread(target=self.control, args=())
+                self.thread.name = "remote_control"
                 self.thread.start()
 
-            self.alarm_clock = threading.Thread(target=self.clock, args=())
-            self.alarm_clock.start()
-
-            self.is_sleeping = True
+            if self.start_sleeping:
+                self.sleep()
 
     def wake(self):
-        if not self.with_thread:
-            self.control()
+        if self.is_sleeping:
+            self.is_sleeping = False
+            print "> Deactivated sleep mode"
+
+            self.events.wake_up()
 
     def sleep(self):
-        self.is_sleeping = True
+        if not self.is_sleeping:
+            self.is_sleeping = True
+            AlarmClock(self.wake, self).start()
+
+            print "> Activated sleep mode! Press '" + ControllerMapping.WAKE_UP + "' for deactivating!"
 
     def deactivate(self):
         self.remote_online = False
@@ -150,7 +157,6 @@ class RemoteControl:
                     ControllerMapping.STICK_R_DEAD = int(profile['STICK_R_DEAD'])
 
                     self.profile_loaded = True
-            # profile = pandas.read_csv('profiles/' + self.profile + '.csv')
 
         except (KeyError, IOError):
             print "> Invalid profile! Switching back to default!"
@@ -338,13 +344,3 @@ class RemoteControl:
                             # MOVEMENT SOUTH
                             if state < 255:
                                 self.events.on_stick_right_south(code, self.percent_value(state))
-
-    def clock(self):
-        events = get_gamepad()
-
-        while self.remote_online:
-            if self.is_sleeping:
-                for _ in events:
-                    print ">", _.code
-                    if _.code in ControllerMapping.WAKE_UP:
-                        self.events.wake_up(_.code, _.state)
