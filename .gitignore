@@ -171,6 +171,5 @@ fabric.properties
 # Editor-based Rest Client
 .idea/httpRequests
 
-/RemoteControlTest.py
 /.idea/
 *.bat

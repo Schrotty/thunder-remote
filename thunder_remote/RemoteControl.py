@@ -7,7 +7,7 @@ from RemoteControlEvents import RemoteControlEvents
 
 
 class RemoteControl:
-    def __init__(self, profile="default", debug_mode=False, with_thread=True):
+    def __init__(self, profile="default", debug_mode=False, with_thread=True, profiles_path='profiles'):
         self.events = RemoteControlEvents()
 
         self.tries_loading_profile = 1
@@ -21,6 +21,7 @@ class RemoteControl:
         self.profile_loaded = False
         self.with_thread = with_thread
         self.is_sleeping = False
+        self.profiles_path=profiles_path
 
         print "> INIT REMOTE CONTROL"
         print "> Looking for gamepad..."
@@ -91,7 +92,7 @@ class RemoteControl:
     def load_profile(self):
         try:
 
-            path = 'profiles/' + self.profile + '.csv'
+            path = self.profiles_path + '/' + self.profile + '.csv'
             if not os.path.isfile(path):
                 print "> Profile '" + self.profile + "' not found!"
                 return
