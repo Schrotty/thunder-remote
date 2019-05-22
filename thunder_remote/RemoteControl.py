@@ -98,7 +98,6 @@ class RemoteControl:
 
     def load_profile(self):
         try:
-
             path = self.profiles_path + '/' + self.profile + '.csv'
             if not os.path.isfile(path):
                 print "> Profile '" + self.profile + "' not found!"

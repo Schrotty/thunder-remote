@@ -1,1 +1,2 @@
-include /thunder_remote/profiles/*.csv
+include thunder_remote/profiles/default.csv
+include thunder_remote/profiles/madness.csv
