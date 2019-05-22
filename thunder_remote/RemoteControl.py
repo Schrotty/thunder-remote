@@ -1,6 +1,7 @@
 import os
 import csv
 import threading
+
 from thunder_remote import ControllerMapping
 from inputs import devices, get_gamepad
 from RemoteControlEvents import RemoteControlEvents
@@ -8,7 +9,8 @@ from thunder_remote.AlarmClock import AlarmClock
 
 
 class RemoteControl:
-    def __init__(self, profile="default", debug_mode=False, with_thread=True, profiles_path='profiles', start_sleeping=False):
+    def __init__(self, profile="default", debug_mode=False, with_thread=True,
+                 profiles_path='profiles', start_sleeping=False):
         self.events = RemoteControlEvents()
 
         self.tries_loading_profile = 1
@@ -23,6 +25,7 @@ class RemoteControl:
         self.is_sleeping = False
         self.profiles_path = profiles_path
         self.start_sleeping = start_sleeping
+        self.alarm = None
 
         print "> INIT REMOTE CONTROL"
         print "> Looking for gamepad..."
@@ -66,14 +69,14 @@ class RemoteControl:
     def wake(self):
         if self.is_sleeping:
             self.is_sleeping = False
-            print "> Deactivated sleep mode"
 
             self.events.wake_up()
 
     def sleep(self):
+        # TODO: Implement https://stackoverflow.com/questions/10440667/in-python-threading-how-i-can-i-track-a-threads-completion/32404924#32404924
         if not self.is_sleeping:
             self.is_sleeping = True
-            AlarmClock(self.wake, self).start()
+            AlarmClock(self.wake).start()
 
             print "> Activated sleep mode! Press '" + str(ControllerMapping.WAKE_UP) + "' for deactivating!"
 
@@ -86,6 +89,11 @@ class RemoteControl:
         self.thread.join()
 
     def percent_value(self, state):
+        """
+
+        :param state:
+        :return:
+        """
         max_val = 0
         min_val = 128.0
 
@@ -99,6 +107,9 @@ class RemoteControl:
     def load_profile(self):
         try:
             path = self.profiles_path + '/' + self.profile + '.csv'
+            if self.profiles_path is 'profiles':
+                path = os.path.dirname(os.path.realpath(__file__)) + '/' + path
+
             if not os.path.isfile(path):
                 print "> Profile '" + self.profile + "' not found!"
                 return
