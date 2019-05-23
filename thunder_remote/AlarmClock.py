@@ -1,4 +1,5 @@
 import threading
+from time import sleep
 
 from inputs import get_gamepad
 from thunder_remote import ControllerMapping
@@ -32,5 +33,5 @@ class AlarmClock:
 
         clock = threading.Thread(target=with_callback)
         clock.start()
-
+        sleep(5)
         return clock
