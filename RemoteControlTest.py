@@ -13,7 +13,7 @@ def any(code):
     print ">", code
 
 
-remote = RemoteControl(start_sleeping=True, with_thread=False, debug_mode=True)
+remote = RemoteControl(profile="madness", start_sleeping=True, with_thread=False, debug_mode=True)
 if remote.is_available():
     remote.events.wake_up += lambda: wake_up(remote)
     remote.events.on_west += lambda code, state: sleep(remote)

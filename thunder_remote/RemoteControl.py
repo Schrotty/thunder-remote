@@ -66,20 +66,6 @@ class RemoteControl:
             if self.start_sleeping:
                 self.sleep()
 
-    def wake(self):
-        if self.is_sleeping:
-            self.is_sleeping = False
-
-            self.events.wake_up()
-
-    def sleep(self):
-        # TODO: Implement https://stackoverflow.com/questions/10440667/in-python-threading-how-i-can-i-track-a-threads-completion/32404924#32404924
-        if not self.is_sleeping:
-            self.is_sleeping = True
-            AlarmClock(self.wake).start()
-
-            print "> Activated sleep mode! Press '" + str(ControllerMapping.WAKE_UP) + "' for deactivating!"
-
     def deactivate(self):
         self.remote_online = False
         print "> Stop remote control"
@@ -87,6 +73,20 @@ class RemoteControl:
             return
 
         self.thread.join()
+
+    def wake(self):
+        if self.is_sleeping:
+            self.is_sleeping = False
+            self.alarm.join()
+
+            self.events.wake_up()
+
+    def sleep(self):
+        if not self.is_sleeping:
+            self.is_sleeping = True
+            self.alarm = AlarmClock.launch_with_callback(callback=self.wake())
+
+            print "> Activated sleep mode! Press '" + str(ControllerMapping.WAKE_UP) + "' for deactivating!"
 
     def percent_value(self, state):
         """
@@ -107,6 +107,9 @@ class RemoteControl:
     def load_profile(self):
         try:
             path = self.profiles_path + '/' + self.profile + '.csv'
+            if self.debug_mode:
+                print ">", path
+
             if self.profiles_path is 'profiles':
                 path = os.path.dirname(os.path.realpath(__file__)) + '/' + path
 
