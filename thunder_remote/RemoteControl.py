@@ -314,7 +314,7 @@ class RemoteControl:
                     if code in controller_mapping.STICK_LEFT_X or code in controller_mapping.STICK_LEFT_Y:
 
                         # ANY MOVEMENT
-                        queue.put(["on_stick_left", code, state])
+                        queue.put(["on_stick_left", code, RemoteControl.percent_value(state)])
 
                         # X-AXIS
                         if code in controller_mapping.STICK_LEFT_X:
@@ -348,13 +348,13 @@ class RemoteControl:
                     if code in controller_mapping.STICK_RIGHT_X or code in controller_mapping.STICK_RIGHT_Y:
 
                         # ANY MOVEMENT
-                        queue.put(["on_stick_right", code, state])
+                        queue.put(["on_stick_right", code, RemoteControl.percent_value(state)])
 
                         # X-AXIS
                         if code in controller_mapping.STICK_RIGHT_X:
 
                             # ANY X-AXIS MOVEMENT
-                            queue.put(["on_stick_right_x", code, state])
+                            queue.put(["on_stick_right_x", code, RemoteControl.percent_value(state)])
 
                             # MOVEMENT EAST
                             if state >= controller_mapping.STICK_CENTER:
@@ -368,7 +368,7 @@ class RemoteControl:
                         if code in controller_mapping.STICK_RIGHT_Y:
 
                             # ANY Y-AXIS MOVEMENT
-                            queue.put(["on_stick_right_y", code, state])
+                            queue.put(["on_stick_right_y", code, RemoteControl.percent_value(state)])
 
                             # MOVEMENT NORTH
                             if state >= controller_mapping.STICK_CENTER:
