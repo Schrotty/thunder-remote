@@ -47,13 +47,10 @@ class RemoteControl:
         print ">"
 
         if self.remote_found and self.profile_loaded:
+            print "> Remote control is now ready for activation!"
             self.proc = Process(group=None, target=RemoteControl.control, name="thunder_remote",
                                 args=(RemoteControl.event_queue, RemoteControl.control_queue, start_sleeping,
                                       debug_mode, controller_mapping))
-
-            print "> Remote control is now available!"
-        else:
-            print "> Remote control is unavailable!"
 
     def activate(self):
         if self.remote_online:
@@ -63,11 +60,13 @@ class RemoteControl:
             if self.start_sleeping:
                 self.sleep()
 
+            print "> Remote control activated!"
             self.proc.start()
 
     def deactivate(self):
         self.remote_online = False
         RemoteControl.control_queue.put(["run", self.remote_online])
+        print "> Remote control deactivated!"
 
     def wake(self):
         if self.is_sleeping:
