@@ -25,6 +25,10 @@ def any(code):
     print ">", code
 
 
+def print_val(state):
+    print ">", state
+
+
 if __name__ == "__main__":
     remote = RemoteControl(profile="default", start_sleeping=True, debug_mode=False)
     if remote.is_available():
@@ -33,6 +37,9 @@ if __name__ == "__main__":
         remote.events.on_any += lambda code, state: any(state)
         remote.events.on_select += lambda code, state: kill_rc(remote)
         remote.events.on_north += lambda code, state: say_hello()
+
+        remote.events.on_stick_left_y += lambda code, state: print_val(state)
+        remote.events.on_stick_right_y += lambda code, state: print_val(state)
 
         remote.activate()
 
