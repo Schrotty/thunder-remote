@@ -8,11 +8,18 @@ from thunder_remote.ControllerMapping import ControllerMapping
 
 
 class RemoteControl:
+
+    # DEBUG LEVEL
+    NO_DEBUG = 0
+    BASIC_DEBUG = 1
+    QUEUE_DEBUG = 2
+    EVENT_DEBUG = 3
+
     event_queue = Queue()
     control_queue = Queue()
 
-    def __init__(self, profile="default", debug_mode=False, profiles_path='profiles', start_sleeping=False):
-        self.debug = debug_mode
+    def __init__(self, profile="default", debug_level=NO_DEBUG, profiles_path='profiles', start_sleeping=False):
+        self.debug_level = debug_level
         self.is_sleeping = start_sleeping
 
         self.events = RemoteControlEvents()
@@ -50,7 +57,7 @@ class RemoteControl:
             print "> Remote control is now ready for activation!"
             self.proc = Process(group=None, target=RemoteControl.control, name="thunder_remote",
                                 args=(RemoteControl.event_queue, RemoteControl.control_queue, start_sleeping,
-                                      debug_mode, controller_mapping))
+                                      debug_level, controller_mapping))
 
     def activate(self):
         if self.remote_online:
@@ -72,10 +79,16 @@ class RemoteControl:
         if self.is_sleeping:
             self.is_sleeping = False
 
+            if self.debug_level == RemoteControl.BASIC_DEBUG:
+                print "> [DEBUG] WAKE_UP"
+
     def sleep(self):
         if not self.is_sleeping:
             self.is_sleeping = True
             RemoteControl.control_queue.put(["sleep", self.is_sleeping])
+
+            if self.debug_level == RemoteControl.BASIC_DEBUG:
+                print "> [DEBUG] SLEEP"
 
     def listen(self):
         if not RemoteControl.event_queue.empty():
@@ -90,6 +103,9 @@ class RemoteControl:
             for event in self.events.__iter__():
                 if event.__name__ == method:
                     if code is not None and state is not None:
+                        if self.debug_level == RemoteControl.QUEUE_DEBUG:
+                            print "> [DEBUG] QUEUE-OUT: {0} {1}".format(code, state)
+
                         event.__call__(code, state)
                         return
 
@@ -100,7 +116,7 @@ class RemoteControl:
 
         try:
             path = self.profiles_path + '/' + self.profile + '.csv'
-            if self.debug:
+            if self.debug_level == RemoteControl.BASIC_DEBUG:
                 print ">", path
 
             if self.profiles_path is 'profiles':
@@ -193,7 +209,7 @@ class RemoteControl:
     def control(cls, queue, c_queue, sleeping, debug, controller_mapping):
         is_running = True
         is_sleeping = sleeping
-        is_debug = debug
+        debug_level = debug
 
         prev_cross_state = None
 
@@ -212,8 +228,8 @@ class RemoteControl:
                 state = event.state
 
                 if not is_sleeping:
-                    if is_debug:
-                        events.on_any(code, state)
+                    if debug_level == RemoteControl.EVENT_DEBUG:
+                        queue.put(["on_any", code, state])
 
                     # BUTTON RELEASED
                     if state == 0:
