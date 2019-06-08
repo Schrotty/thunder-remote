@@ -13,7 +13,17 @@ class RemoteControl:
     event_queue = Queue()
     control_queue = Queue()
 
+    # TODO: adjust process commands
+    # TODO: there is an issue with the 'start_sleeping' parameter
+    # TODO: write documentation and example implementation
     def __init__(self, profile="default", debug_level=DebugLevel.NONE, profiles_path='profiles', start_sleeping=False):
+        """
+
+        :param profile: the controller profile to load
+        :param debug_level: the debug level
+        :param profiles_path: alternate path to the profile
+        :param start_sleeping: start controller sleeping
+        """
         self.debug_level = debug_level
         self.is_sleeping = start_sleeping
 
@@ -55,6 +65,9 @@ class RemoteControl:
                                       debug_level, controller_mapping))
 
     def activate(self):
+        """
+
+        """
         if self.remote_online:
             print "> Remote control already activated!"
         else:
@@ -66,11 +79,17 @@ class RemoteControl:
             self.proc.start()
 
     def deactivate(self):
+        """
+
+        """
         self.remote_online = False
         RemoteControl.control_queue.put(["run", self.remote_online])
         print "> Remote control deactivated!"
 
     def wake(self):
+        """
+
+        """
         if self.is_sleeping:
             self.is_sleeping = False
 
@@ -78,6 +97,9 @@ class RemoteControl:
                 print "> [DEBUG] WAKE_UP"
 
     def sleep(self):
+        """
+
+        """
         if not self.is_sleeping:
             self.is_sleeping = True
             RemoteControl.control_queue.put(["sleep", self.is_sleeping])
@@ -86,6 +108,9 @@ class RemoteControl:
                 print "> [DEBUG] SLEEP"
 
     def listen(self):
+        """
+
+        """
         if not RemoteControl.event_queue.empty():
             action = RemoteControl.event_queue.get()
 
@@ -102,11 +127,14 @@ class RemoteControl:
                             print "> [DEBUG] QUEUE-OUT: {0} {1}".format(code, state)
 
                         event.__call__(code, state)
-                        return
-
-                    event.__call__()
+                    else:
+                        event.__call__()
 
     def load_profile(self):
+        """
+
+        :return: the current controller mapping
+        """
         controller_mapping = ControllerMapping()
 
         try:
@@ -119,7 +147,7 @@ class RemoteControl:
 
             if not os.path.isfile(path):
                 print "> Profile '" + self.profile + "' not found!"
-                return
+                return None
 
             self.tries_loading_profile += 1
             with open(path, 'r') as csvFile:
@@ -186,11 +214,20 @@ class RemoteControl:
 
         return controller_mapping
 
+    @property
     def is_available(self):
+        """
+
+        :return: is a remote control available
+        """
         return self.remote_found
 
     @classmethod
     def percent_value(cls, (state, common, alternate)):
+        """
+
+        :return: the normalized state
+        """
         mod = 1
         values = common
 
@@ -205,6 +242,14 @@ class RemoteControl:
 
     @classmethod
     def control(cls, queue, c_queue, sleeping, debug, controller_mapping):
+        """
+
+        :param queue: the queue for piping events to the main process
+        :param c_queue: the queue for receiving commands
+        :param sleeping: start controller sleeping
+        :param debug: the debug level
+        :param controller_mapping: the current controller mapping
+        """
         is_running = True
         is_sleeping = sleeping
         debug_level = debug
