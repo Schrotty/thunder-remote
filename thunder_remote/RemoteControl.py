@@ -5,20 +5,15 @@ from multiprocessing import Process, Queue
 from inputs import devices, get_gamepad
 from RemoteControlEvents import RemoteControlEvents
 from thunder_remote.ControllerMapping import ControllerMapping
+from thunder_remote.DebugLevel import DebugLevel
 
 
 class RemoteControl:
 
-    # DEBUG LEVEL
-    NO_DEBUG = 0
-    BASIC_DEBUG = 1
-    QUEUE_DEBUG = 2
-    EVENT_DEBUG = 3
-
     event_queue = Queue()
     control_queue = Queue()
 
-    def __init__(self, profile="default", debug_level=NO_DEBUG, profiles_path='profiles', start_sleeping=False):
+    def __init__(self, profile="default", debug_level=DebugLevel.NONE, profiles_path='profiles', start_sleeping=False):
         self.debug_level = debug_level
         self.is_sleeping = start_sleeping
 
@@ -79,7 +74,7 @@ class RemoteControl:
         if self.is_sleeping:
             self.is_sleeping = False
 
-            if self.debug_level == RemoteControl.BASIC_DEBUG:
+            if self.debug_level == DebugLevel.BASIC:
                 print "> [DEBUG] WAKE_UP"
 
     def sleep(self):
@@ -87,7 +82,7 @@ class RemoteControl:
             self.is_sleeping = True
             RemoteControl.control_queue.put(["sleep", self.is_sleeping])
 
-            if self.debug_level == RemoteControl.BASIC_DEBUG:
+            if self.debug_level == DebugLevel.BASIC:
                 print "> [DEBUG] SLEEP"
 
     def listen(self):
@@ -103,7 +98,7 @@ class RemoteControl:
             for event in self.events.__iter__():
                 if event.__name__ == method:
                     if code is not None and state is not None:
-                        if self.debug_level == RemoteControl.QUEUE_DEBUG:
+                        if self.debug_level == DebugLevel.QUEUE:
                             print "> [DEBUG] QUEUE-OUT: {0} {1}".format(code, state)
 
                         event.__call__(code, state)
@@ -116,7 +111,7 @@ class RemoteControl:
 
         try:
             path = self.profiles_path + '/' + self.profile + '.csv'
-            if self.debug_level == RemoteControl.BASIC_DEBUG:
+            if self.debug_level == DebugLevel.BASIC:
                 print ">", path
 
             if self.profiles_path is 'profiles':
@@ -167,16 +162,17 @@ class RemoteControl:
                     # WAKE UP
                     controller_mapping.WAKE_UP = profile['WAKE_UP']
 
-                    # STICK VALUES
-                    controller_mapping.STICK_CENTER = int(profile['STICK_CENTER'])
-                    controller_mapping.STICK_L_MAX = int(profile['STICK_L_MAX'])
-                    controller_mapping.STICK_L_MIN = int(profile['STICK_L_MIN'])
-                    controller_mapping.STICK_R_MAX = int(profile['STICK_R_MAX'])
-                    controller_mapping.STICK_R_MIN = int(profile['STICK_R_MIN'])
+                    # VALUES FOR STICK MOVEMENT
+                    fward_vals = profile['FORWARD_VALUES'].split(';')
+                    bward_vals = profile['BACKWARD_VALUES'].split(';')
 
-                    # STICK DEAD ZONES
-                    controller_mapping.STICK_L_DEAD = int(profile['STICK_L_DEAD'])
-                    controller_mapping.STICK_R_DEAD = int(profile['STICK_R_DEAD'])
+                    controller_mapping.FORWARD_VALUES = range(int(fward_vals[0]), int(fward_vals[1]) + 1)
+                    if fward_vals[2] == "True":
+                        controller_mapping.FORWARD_VALUES.reverse()
+
+                    controller_mapping.BACKWARD_VALUES = range(int(bward_vals[0]), int(bward_vals[1]) + 1)
+                    if bward_vals[2] == "True":
+                        controller_mapping.BACKWARD_VALUES.reverse()
 
                 self.profile_loaded = True
 
@@ -194,16 +190,18 @@ class RemoteControl:
         return self.remote_found
 
     @classmethod
-    def percent_value(cls, state):
-        max_val = 0
-        min_val = 128.0
+    def percent_value(cls, (state, common, alternate)):
+        mod = 1
+        values = common
 
-        if 255 >= state > 128:
-            max_val = 255.0
-            min_val = 128.0
+        if state not in values:
+            values = alternate
+            mod = -1
 
-        val = round((state - min_val) / (max_val - min_val), 2)
-        return val * -1 if state >= 128 else val
+            if state not in values:
+                return 0
+
+        return (state - float(values[0])) / (values[values.__len__() - 1] - values[0]) * mod
 
     @classmethod
     def control(cls, queue, c_queue, sleeping, debug, controller_mapping):
@@ -226,9 +224,10 @@ class RemoteControl:
             for event in events:
                 code = event.code
                 state = event.state
+                calc_props = (state, controller_mapping.FORWARD_VALUES, controller_mapping.BACKWARD_VALUES)
 
                 if not is_sleeping:
-                    if debug_level == RemoteControl.EVENT_DEBUG:
+                    if debug_level == DebugLevel.EVENT:
                         queue.put(["on_any", code, state])
 
                     # BUTTON RELEASED
@@ -329,69 +328,69 @@ class RemoteControl:
                     if code in controller_mapping.STICK_LEFT_X or code in controller_mapping.STICK_LEFT_Y:
 
                         # ANY MOVEMENT
-                        queue.put(["on_stick_left", code, RemoteControl.percent_value(state)])
+                        queue.put(["on_stick_left", code, RemoteControl.percent_value(calc_props)])
 
                         # X-AXIS
                         if code in controller_mapping.STICK_LEFT_X:
 
                             # ANY X-AXIS MOVEMENT
-                            queue.put(["on_stick_left_x", code, RemoteControl.percent_value(state)])
+                            queue.put(["on_stick_left_x", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT EAST
-                            if state >= controller_mapping.STICK_CENTER:
-                                queue.put(["on_stick_left_east", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_left_east", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT WEST
-                            if state < 255:
-                                queue.put(["on_stick_left_west", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_left_west", code, RemoteControl.percent_value(calc_props)])
 
                         # Y-AXIS
                         if code in controller_mapping.STICK_LEFT_Y:
 
                             # ANY Y-AXIS MOVEMENT
-                            queue.put(["on_stick_left_y", code, RemoteControl.percent_value(state)])
+                            queue.put(["on_stick_left_y", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT NORTH
-                            if state >= controller_mapping.STICK_CENTER:
-                                queue.put(["on_stick_left_north", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_left_north", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT SOUTH
-                            if state < 255:
-                                queue.put(["on_stick_left_south", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_left_south", code, RemoteControl.percent_value(calc_props)])
 
                     # RIGHT STICK
                     if code in controller_mapping.STICK_RIGHT_X or code in controller_mapping.STICK_RIGHT_Y:
 
                         # ANY MOVEMENT
-                        queue.put(["on_stick_right", code, RemoteControl.percent_value(state)])
+                        queue.put(["on_stick_right", code, RemoteControl.percent_value(calc_props)])
 
                         # X-AXIS
                         if code in controller_mapping.STICK_RIGHT_X:
 
                             # ANY X-AXIS MOVEMENT
-                            queue.put(["on_stick_right_x", code, RemoteControl.percent_value(state)])
+                            queue.put(["on_stick_right_x", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT EAST
-                            if state >= controller_mapping.STICK_CENTER:
-                                queue.put(["on_stick_right_east", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_right_east", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT WEST
-                            if state < 255:
-                                queue.put(["on_stick_right_west", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_right_west", code, RemoteControl.percent_value(calc_props)])
 
                         # Y-AXIS
                         if code in controller_mapping.STICK_RIGHT_Y:
 
                             # ANY Y-AXIS MOVEMENT
-                            queue.put(["on_stick_right_y", code, RemoteControl.percent_value(state)])
+                            queue.put(["on_stick_right_y", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT NORTH
-                            if state >= controller_mapping.STICK_CENTER:
-                                queue.put(["on_stick_right_north", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_right_north", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT SOUTH
-                            if state < 255:
-                                queue.put(["on_stick_right_south", code, RemoteControl.percent_value(state)])
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_right_south", code, RemoteControl.percent_value(calc_props)])
                 else:
                     if code in controller_mapping.WAKE_UP:
                         is_sleeping = False

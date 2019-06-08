@@ -26,15 +26,8 @@ class ControllerMapping:
 
     WAKE_UP = []
 
-    STICK_L_MAX = 0
-    STICK_L_MIN = 0
-    STICK_R_MAX = 0
-    STICK_R_MIN = 0
-
-    STICK_L_DEAD = 0
-    STICK_R_DEAD = 0
-
-    STICK_CENTER = 0
+    FORWARD_VALUES = []
+    BACKWARD_VALUES = []
 
     def __init__(self):
         pass
