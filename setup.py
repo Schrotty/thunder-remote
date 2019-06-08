@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="thunder-remote",
-    version="0.5rc3",
+    version="0.5rc4",
     author="Schrotty",
     author_email="rubenmaurer@live.de",
     description="A modified version of the 'pyController' package for usage with a ThunderBorg",
@@ -16,7 +16,8 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     install_requires=[
         'inputs',
-        'events'
+        'events',
+        'enum'
     ],
     license="MIT",
     include_package_data=True,
