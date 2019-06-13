@@ -1,28 +1,40 @@
 import os
 import csv
-import threading
 
-from thunder_remote import ControllerMapping
+from multiprocessing import Process, Queue
 from inputs import devices, get_gamepad
 from RemoteControlEvents import RemoteControlEvents
-from thunder_remote.AlarmClock import AlarmClock
+from thunder_remote.ControllerMapping import ControllerMapping
+from thunder_remote.DebugLevel import DebugLevel
 
 
 class RemoteControl:
-    def __init__(self, profile="default", debug_mode=False, with_thread=True,
-                 profiles_path='profiles', start_sleeping=False):
-        self.events = RemoteControlEvents()
 
+    event_queue = Queue()
+    control_queue = Queue()
+
+    # TODO: adjust process commands
+    # TODO: there is an issue with the 'start_sleeping' parameter
+    # TODO: write documentation and example implementation
+    def __init__(self, profile="default", debug_level=DebugLevel.NONE, profiles_path='profiles', start_sleeping=False):
+        """
+
+        :param profile: the controller profile to load
+        :param debug_level: the debug level
+        :param profiles_path: alternate path to the profile
+        :param start_sleeping: start controller sleeping
+        """
+        self.debug_level = debug_level
+        self.is_sleeping = start_sleeping
+
+        self.events = RemoteControlEvents()
+        self.remote_online = False
         self.tries_loading_profile = 1
         self.profile = profile
         self.controller_name = "Unknown"
         self.thread = None
         self.remote_found = True
-        self.remote_online = False
-        self.debug_mode = debug_mode
         self.profile_loaded = False
-        self.with_thread = with_thread
-        self.is_sleeping = False
         self.profiles_path = profiles_path
         self.start_sleeping = start_sleeping
         self.alarm = None
@@ -38,7 +50,7 @@ class RemoteControl:
         print ">"
         print "> Loading profile '" + self.profile + "'"
 
-        self.load_profile()
+        controller_mapping = self.load_profile()
         if not self.profile_loaded:
             print "> Unable to load a profile!"
         else:
@@ -47,67 +59,87 @@ class RemoteControl:
         print ">"
 
         if self.remote_found and self.profile_loaded:
-            print "> Remote control is now available!"
-        else:
-            print "> Remote control is unavailable!"
+            print "> Remote control is now ready for activation!"
+            self.proc = Process(group=None, target=RemoteControl.control, name="thunder_remote",
+                                args=(RemoteControl.event_queue, RemoteControl.control_queue, start_sleeping,
+                                      debug_level, controller_mapping))
 
     def activate(self):
+        """
+
+        """
         if self.remote_online:
             print "> Remote control already activated!"
         else:
             self.remote_online = True
-            if not self.with_thread:
-                print "> Running in main thread"
-            else:
-                self.thread = threading.Thread(target=self.control, args=())
-                self.thread.name = "remote_control"
-                self.thread.start()
-
             if self.start_sleeping:
                 self.sleep()
 
-    def deactivate(self):
-        self.remote_online = False
-        print "> Stop remote control"
-        if not self.with_thread:
-            return
+            print "> Remote control activated!"
+            self.proc.start()
 
-        self.thread.join()
+    def deactivate(self):
+        """
+
+        """
+        self.remote_online = False
+        RemoteControl.control_queue.put(["run", self.remote_online])
+        print "> Remote control deactivated!"
 
     def wake(self):
+        """
+
+        """
         if self.is_sleeping:
             self.is_sleeping = False
-            self.alarm.join()
 
-            self.events.wake_up()
+            if self.debug_level == DebugLevel.BASIC:
+                print "> [DEBUG] WAKE_UP"
 
     def sleep(self):
+        """
+
+        """
         if not self.is_sleeping:
             self.is_sleeping = True
-            self.alarm = AlarmClock.launch_with_callback(callback=self.wake())
+            RemoteControl.control_queue.put(["sleep", self.is_sleeping])
 
-            print "> Activated sleep mode! Press '" + str(ControllerMapping.WAKE_UP) + "' for deactivating!"
+            if self.debug_level == DebugLevel.BASIC:
+                print "> [DEBUG] SLEEP"
 
-    def percent_value(self, state):
+    def listen(self):
         """
 
-        :param state:
-        :return:
         """
-        max_val = 0
-        min_val = 128.0
+        if not RemoteControl.event_queue.empty():
+            action = RemoteControl.event_queue.get()
 
-        if 255 >= state > 128:
-            max_val = 255.0
-            min_val = 128.0
+            code, state = None, None
+            method = action[0]
+            if len(action) == 3:
+                code = action[1]
+                state = action[2]
 
-        val = round((state - min_val) / (max_val - min_val), 2)
-        return val * -1 if state >= 128 else val
+            for event in self.events.__iter__():
+                if event.__name__ == method:
+                    if code is not None and state is not None:
+                        if self.debug_level == DebugLevel.QUEUE:
+                            print "> [DEBUG] QUEUE-OUT: {0} {1}".format(code, state)
+
+                        event.__call__(code, state)
+                    else:
+                        event.__call__()
 
     def load_profile(self):
+        """
+
+        :return: the current controller mapping
+        """
+        controller_mapping = ControllerMapping()
+
         try:
             path = self.profiles_path + '/' + self.profile + '.csv'
-            if self.debug_mode:
+            if self.debug_level == DebugLevel.BASIC:
                 print ">", path
 
             if self.profiles_path is 'profiles':
@@ -115,7 +147,7 @@ class RemoteControl:
 
             if not os.path.isfile(path):
                 print "> Profile '" + self.profile + "' not found!"
-                return
+                return None
 
             self.tries_loading_profile += 1
             with open(path, 'r') as csvFile:
@@ -126,50 +158,51 @@ class RemoteControl:
                     self.controller_name = profile['CONTROLLER']
 
                     # LEFT BUTTONS
-                    ControllerMapping.BTN_NORTH = profile['BTN_NORTH']
-                    ControllerMapping.BTN_EAST = profile['BTN_EAST']
-                    ControllerMapping.BTN_SOUTH = profile['BTN_SOUTH']
-                    ControllerMapping.BTN_WEST = profile['BTN_WEST']
+                    controller_mapping.BTN_NORTH = profile['BTN_NORTH']
+                    controller_mapping.BTN_EAST = profile['BTN_EAST']
+                    controller_mapping.BTN_SOUTH = profile['BTN_SOUTH']
+                    controller_mapping.BTN_WEST = profile['BTN_WEST']
 
                     # START AND SELECT
-                    ControllerMapping.START = profile['START']
-                    ControllerMapping.SELECT = profile['SELECT']
+                    controller_mapping.START = profile['START']
+                    controller_mapping.SELECT = profile['SELECT']
 
                     # CROSS
-                    ControllerMapping.CROSS_Y = profile['CROSS_Y']
-                    ControllerMapping.CROSS_X = profile['CROSS_X']
+                    controller_mapping.CROSS_Y = profile['CROSS_Y']
+                    controller_mapping.CROSS_X = profile['CROSS_X']
 
                     # STICK R & STICK L
-                    ControllerMapping.STICK_RIGHT_Y = profile['STICK_R_Y']
-                    ControllerMapping.STICK_RIGHT_X = profile['STICK_R_X']
-                    ControllerMapping.STICK_LEFT_Y = profile['STICK_L_Y']
-                    ControllerMapping.STICK_LEFT_X = profile['STICK_L_X']
+                    controller_mapping.STICK_RIGHT_Y = profile['STICK_R_Y']
+                    controller_mapping.STICK_RIGHT_X = profile['STICK_R_X']
+                    controller_mapping.STICK_LEFT_Y = profile['STICK_L_Y']
+                    controller_mapping.STICK_LEFT_X = profile['STICK_L_X']
 
                     # TRIGGER AND SHOULDER
-                    ControllerMapping.TRIGGER_R = profile['TRIGGER_R']
-                    ControllerMapping.SHOULDR_R = profile['SHOULDER_R']
-                    ControllerMapping.TRIGGER_L = profile['TRIGGER_L']
-                    ControllerMapping.SHOULDR_L = profile['SHOULDER_L']
+                    controller_mapping.TRIGGER_R = profile['TRIGGER_R']
+                    controller_mapping.SHOULDR_R = profile['SHOULDER_R']
+                    controller_mapping.TRIGGER_L = profile['TRIGGER_L']
+                    controller_mapping.SHOULDR_L = profile['SHOULDER_L']
 
                     # THUMBS
-                    ControllerMapping.THUMB_R = profile['THUMB_R']
-                    ControllerMapping.THUMB_L = profile['THUMB_L']
+                    controller_mapping.THUMB_R = profile['THUMB_R']
+                    controller_mapping.THUMB_L = profile['THUMB_L']
 
                     # WAKE UP
-                    ControllerMapping.WAKE_UP = profile['WAKE_UP']
+                    controller_mapping.WAKE_UP = profile['WAKE_UP']
 
-                    # STICK VALUES
-                    ControllerMapping.STICK_CENTER = int(profile['STICK_CENTER'])
-                    ControllerMapping.STICK_L_MAX = int(profile['STICK_L_MAX'])
-                    ControllerMapping.STICK_L_MIN = int(profile['STICK_L_MIN'])
-                    ControllerMapping.STICK_R_MAX = int(profile['STICK_R_MAX'])
-                    ControllerMapping.STICK_R_MIN = int(profile['STICK_R_MIN'])
+                    # VALUES FOR STICK MOVEMENT
+                    fward_vals = profile['FORWARD_VALUES'].split(';')
+                    bward_vals = profile['BACKWARD_VALUES'].split(';')
 
-                    # STICK DEAD ZONES
-                    ControllerMapping.STICK_L_DEAD = int(profile['STICK_L_DEAD'])
-                    ControllerMapping.STICK_R_DEAD = int(profile['STICK_R_DEAD'])
+                    controller_mapping.FORWARD_VALUES = range(int(fward_vals[0]), int(fward_vals[1]) + 1)
+                    if fward_vals[2] == "True":
+                        controller_mapping.FORWARD_VALUES.reverse()
 
-                    self.profile_loaded = True
+                    controller_mapping.BACKWARD_VALUES = range(int(bward_vals[0]), int(bward_vals[1]) + 1)
+                    if bward_vals[2] == "True":
+                        controller_mapping.BACKWARD_VALUES.reverse()
+
+                self.profile_loaded = True
 
         except (KeyError, IOError):
             print "> Invalid profile! Switching back to default!"
@@ -179,180 +212,231 @@ class RemoteControl:
             else:
                 self.profile_loaded = False
 
+        return controller_mapping
+
+    @property
     def is_available(self):
+        """
+
+        :return: is a remote control available
+        """
         return self.remote_found
 
-    def control(self):
+    @classmethod
+    def percent_value(cls, (state, common, alternate)):
+        """
+
+        :return: the normalized state
+        """
+        mod = 1
+        values = common
+
+        if state not in values:
+            values = alternate
+            mod = -1
+
+            if state not in values:
+                return 0
+
+        return (state - float(values[0])) / (values[values.__len__() - 1] - values[0]) * mod
+
+    @classmethod
+    def control(cls, queue, c_queue, sleeping, debug, controller_mapping):
+        """
+
+        :param queue: the queue for piping events to the main process
+        :param c_queue: the queue for receiving commands
+        :param sleeping: start controller sleeping
+        :param debug: the debug level
+        :param controller_mapping: the current controller mapping
+        """
+        is_running = True
+        is_sleeping = sleeping
+        debug_level = debug
+
         prev_cross_state = None
 
-        while self.remote_online:
-            events = get_gamepad()
+        while is_running:
+            if not c_queue.empty():
+                cmd = c_queue.get()
+                if cmd[0] == "sleep":
+                    is_sleeping = cmd[1]
 
+                if cmd[0] == "run":
+                    is_running = cmd[1]
+
+            events = get_gamepad()
             for event in events:
                 code = event.code
                 state = event.state
+                calc_props = (state, controller_mapping.FORWARD_VALUES, controller_mapping.BACKWARD_VALUES)
 
-                if self.debug_mode:
-                    self.events.on_any(code, state)
+                if not is_sleeping:
+                    if debug_level == DebugLevel.EVENT:
+                        queue.put(["on_any", code, state])
 
-                # BUTTON RELEASED
-                if state == 0:
+                    # BUTTON RELEASED
+                    if state == 0:
 
-                    # RIGHT BUTTONS
-                    if code in ControllerMapping.BTN_NORTH:
-                        self.events.on_north(code, state)
+                        # RIGHT BUTTONS
+                        if code in controller_mapping.BTN_NORTH:
+                            queue.put(["on_north", code, state])
 
-                    if code in ControllerMapping.BTN_EAST:
-                        self.events.on_east(code, state)
+                        if code in controller_mapping.BTN_EAST:
+                            queue.put(["on_east", code, state])
 
-                    if code in ControllerMapping.BTN_SOUTH:
-                        self.events.on_south(code, state)
+                        if code in controller_mapping.BTN_SOUTH:
+                            queue.put(["on_south", code, state])
 
-                    if code in ControllerMapping.BTN_WEST:
-                        self.events.on_west(code, state)
+                        if code in controller_mapping.BTN_WEST:
+                            queue.put(["on_west", code, state])
 
-                    # START AND SELECT
-                    if code in ControllerMapping.START:
-                        self.events.on_start(code, state)
+                        # START AND SELECT
+                        if code in controller_mapping.START:
+                            queue.put(["on_start", code, state])
 
-                    if code in ControllerMapping.SELECT:
-                        self.events.on_select(code, state)
+                        if code in controller_mapping.SELECT:
+                            queue.put(["on_select", code, state])
 
-                # CONTROLLER CROSS
-                if code in ControllerMapping.CROSS_Y or code in ControllerMapping.CROSS_X:
+                    # CONTROLLER CROSS
+                    if code in controller_mapping.CROSS_Y or code in controller_mapping.CROSS_X:
 
-                    # CROSS NORTH AND SOUTH
-                    if code in ControllerMapping.CROSS_Y:
-                        if state == -1:
-                            self.events.on_cross_north_p(code, state)
-                            prev_cross_state = -1
+                        # CROSS NORTH AND SOUTH
+                        if code in controller_mapping.CROSS_Y:
+                            if state == -1:
+                                queue.put(["on_cross_north_p", code, state])
+                                prev_cross_state = -1
 
-                        if state == 1:
-                            self.events.on_cross_south_p(code, state)
-                            prev_cross_state = 1
+                            if state == 1:
+                                queue.put(["on_cross_south_p", code, state])
+                                prev_cross_state = 1
 
-                        if state == 0:
-                            if prev_cross_state == 1:
-                                self.events.on_cross_south_r(code, state)
-                            else:
-                                self.events.on_cross_north_r(code, state)
+                            if state == 0:
+                                if prev_cross_state == 1:
+                                    queue.put(["on_cross_south_r", code, state])
+                                else:
+                                    queue.put(["on_cross_north_r", code, state])
 
-                    # CROSS WEST AND EAST
-                    if code in ControllerMapping.CROSS_X:
-                        if state == -1:
-                            self.events.on_cross_west_p(code, state)
-                            prev_cross_state = -1
+                        # CROSS WEST AND EAST
+                        if code in controller_mapping.CROSS_X:
+                            if state == -1:
+                                queue.put(["on_cross_west_p", code, state])
+                                prev_cross_state = -1
 
-                        if state == 1:
-                            self.events.on_cross_east_p(code, state)
-                            prev_cross_state = 1
+                            if state == 1:
+                                queue.put(["on_cross_east_p", code, state])
+                                prev_cross_state = 1
 
-                        if state == 0:
-                            if prev_cross_state == 1:
-                                self.events.on_cross_east_r(code, state)
-                            else:
-                                self.events.on_cross_west_r(code, state)
+                            if state == 0:
+                                if prev_cross_state == 1:
+                                    queue.put(["on_cross_east_r", code, state])
+                                else:
+                                    queue.put(["on_cross_west_r", code, state])
 
-                # TRIGGERS
-                if code in ControllerMapping.TRIGGER_L or code in ControllerMapping.TRIGGER_R:
+                    # TRIGGERS
+                    if code in controller_mapping.TRIGGER_L or code in controller_mapping.TRIGGER_R:
 
-                    # LEFT TRIGGER
-                    if code in ControllerMapping.TRIGGER_L:
-                        self.events.on_trigger_left(code, state)
+                        # LEFT TRIGGER
+                        if code in controller_mapping.TRIGGER_L:
+                            queue.put(["on_trigger_left", code, state])
 
-                    # RIGHT TRIGGER
-                    if code in ControllerMapping.TRIGGER_R:
-                        self.events.on_trigger_right(code, state)
+                        # RIGHT TRIGGER
+                        if code in controller_mapping.TRIGGER_R:
+                            queue.put(["on_trigger_right", code, state])
 
-                # SHOULDERS
-                if code in ControllerMapping.SHOULDR_L or code in ControllerMapping.SHOULDR_R:
+                    # SHOULDERS
+                    if code in controller_mapping.SHOULDR_L or code in controller_mapping.SHOULDR_R:
 
-                    # LEFT SHOULDER
-                    if code in ControllerMapping.SHOULDR_L:
+                        # LEFT SHOULDER
+                        if code in controller_mapping.SHOULDR_L:
 
-                        # ON RELEASE
-                        if state == 0:
-                            self.events.on_shoulder_left_r(code, state)
+                            # ON RELEASE
+                            if state == 0:
+                                queue.put(["on_shoulder_left_r", code, state])
 
-                        # WHEN PRESSED
-                        if state == 1:
-                            self.events.on_shoulder_left_p(code, state)
+                            # WHEN PRESSED
+                            if state == 1:
+                                queue.put(["on_shoulder_left_p", code, state])
 
-                    # RIGHT SHOULDER
-                    if code in ControllerMapping.SHOULDR_R:
+                        # RIGHT SHOULDER
+                        if code in controller_mapping.SHOULDR_R:
 
-                        # ON RELEASE
-                        if state == 0:
-                            self.events.on_shoulder_right_r(code, state)
+                            # ON RELEASE
+                            if state == 0:
+                                queue.put(["on_shoulder_right_r", code, state])
 
-                        # WHEN PRESSED
-                        if state == 1:
-                            self.events.on_shoulder_right_p(code, state)
+                            # WHEN PRESSED
+                            if state == 1:
+                                queue.put(["on_shoulder_right_p", code, state])
 
-                # LEFT STICK
-                if code in ControllerMapping.STICK_LEFT_X or code in ControllerMapping.STICK_LEFT_Y:
+                    # LEFT STICK
+                    if code in controller_mapping.STICK_LEFT_X or code in controller_mapping.STICK_LEFT_Y:
 
-                    # ANY MOVEMENT
-                    self.events.on_stick_left(code, state)
+                        # ANY MOVEMENT
+                        queue.put(["on_stick_left", code, RemoteControl.percent_value(calc_props)])
 
-                    # X-AXIS
-                    if code in ControllerMapping.STICK_LEFT_X:
+                        # X-AXIS
+                        if code in controller_mapping.STICK_LEFT_X:
 
-                        # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_left_x(code, self.percent_value(state))
+                            # ANY X-AXIS MOVEMENT
+                            queue.put(["on_stick_left_x", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT EAST
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_left_east(code, self.percent_value(state))
+                            # MOVEMENT EAST
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_left_east", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT WEST
-                        if state < 255:
-                            self.events.on_stick_left_west(code, self.percent_value(state))
+                            # MOVEMENT WEST
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_left_west", code, RemoteControl.percent_value(calc_props)])
 
-                    # Y-AXIS
-                    if code in ControllerMapping.STICK_LEFT_Y:
+                        # Y-AXIS
+                        if code in controller_mapping.STICK_LEFT_Y:
 
-                        # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_left_y(code, self.percent_value(state))
+                            # ANY Y-AXIS MOVEMENT
+                            queue.put(["on_stick_left_y", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT NORTH
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_left_north(code, self.percent_value(state))
+                            # MOVEMENT NORTH
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_left_north", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT SOUTH
-                        if state < 255:
-                            self.events.on_stick_left_south(code, self.percent_value(state))
+                            # MOVEMENT SOUTH
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_left_south", code, RemoteControl.percent_value(calc_props)])
 
-                # RIGHT STICK
-                if code in ControllerMapping.STICK_RIGHT_X or code in ControllerMapping.STICK_RIGHT_Y:
+                    # RIGHT STICK
+                    if code in controller_mapping.STICK_RIGHT_X or code in controller_mapping.STICK_RIGHT_Y:
 
-                    # ANY MOVEMENT
-                    self.events.on_stick_right(code, state)
+                        # ANY MOVEMENT
+                        queue.put(["on_stick_right", code, RemoteControl.percent_value(calc_props)])
 
-                    # X-AXIS
-                    if code in ControllerMapping.STICK_RIGHT_X:
+                        # X-AXIS
+                        if code in controller_mapping.STICK_RIGHT_X:
 
-                        # ANY X-AXIS MOVEMENT
-                        self.events.on_stick_right_x(code, self.percent_value(state))
+                            # ANY X-AXIS MOVEMENT
+                            queue.put(["on_stick_right_x", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT EAST
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_right_east(code, self.percent_value(state))
+                            # MOVEMENT EAST
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_right_east", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT WEST
-                        if state < 255:
-                            self.events.on_stick_right_west(code, self.percent_value(state))
+                            # MOVEMENT WEST
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_right_west", code, RemoteControl.percent_value(calc_props)])
 
-                    # Y-AXIS
-                    if code in ControllerMapping.STICK_RIGHT_Y:
+                        # Y-AXIS
+                        if code in controller_mapping.STICK_RIGHT_Y:
 
-                        # ANY Y-AXIS MOVEMENT
-                        self.events.on_stick_right_y(code, self.percent_value(state))
+                            # ANY Y-AXIS MOVEMENT
+                            queue.put(["on_stick_right_y", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT NORTH
-                        if state >= ControllerMapping.STICK_CENTER:
-                            self.events.on_stick_right_north(code, self.percent_value(state))
+                            # MOVEMENT NORTH
+                            if state in calc_props[1]:
+                                queue.put(["on_stick_right_north", code, RemoteControl.percent_value(calc_props)])
 
-                        # MOVEMENT SOUTH
-                        if state < 255:
-                            self.events.on_stick_right_south(code, self.percent_value(state))
+                            # MOVEMENT SOUTH
+                            if state in calc_props[2]:
+                                queue.put(["on_stick_right_south", code, RemoteControl.percent_value(calc_props)])
+                else:
+                    if code in controller_mapping.WAKE_UP:
+                        is_sleeping = False
+                        queue.put(['wake_up'])
