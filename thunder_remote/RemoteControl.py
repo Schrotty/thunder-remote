@@ -1,7 +1,9 @@
 import os
 import csv
 
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
+from threading import Thread
+
 from inputs import devices, get_gamepad
 from RemoteControlEvents import RemoteControlEvents
 from thunder_remote.ControllerMapping import ControllerMapping
@@ -9,14 +11,15 @@ from thunder_remote.DebugLevel import DebugLevel
 
 
 class RemoteControl:
-
     event_queue = Queue()
     control_queue = Queue()
+    thunder_borg = None
 
     # TODO: adjust process commands
     # TODO: there is an issue with the 'start_sleeping' parameter
     # TODO: write documentation and example implementation
-    def __init__(self, profile="default", debug_level=DebugLevel.NONE, profiles_path='profiles', start_sleeping=False):
+    def __init__(self, profile="default", debug_level=DebugLevel.NONE, profiles_path='profiles', start_sleeping=False,
+                 pi_borg=None):
         """
 
         :param profile: the controller profile to load
@@ -24,6 +27,7 @@ class RemoteControl:
         :param profiles_path: alternate path to the profile
         :param start_sleeping: start controller sleeping
         """
+        RemoteControl.thunder_borg = pi_borg
         self.debug_level = debug_level
         self.is_sleeping = start_sleeping
 
@@ -60,9 +64,9 @@ class RemoteControl:
 
         if self.remote_found and self.profile_loaded:
             print "> Remote control is now ready for activation!"
-            self.proc = Process(group=None, target=RemoteControl.control, name="thunder_remote",
-                                args=(RemoteControl.event_queue, RemoteControl.control_queue, start_sleeping,
-                                      debug_level, controller_mapping))
+            self.proc = Thread(group=None, target=RemoteControl.control, name="thunder_remote",
+                               args=(RemoteControl.event_queue, RemoteControl.control_queue, start_sleeping,
+                                     debug_level, controller_mapping, RemoteControl.thunder_borg))
 
     def activate(self):
         """
@@ -241,7 +245,7 @@ class RemoteControl:
         return (state - float(values[0])) / (values[values.__len__() - 1] - values[0]) * mod
 
     @classmethod
-    def control(cls, queue, c_queue, sleeping, debug, controller_mapping):
+    def control(cls, queue, c_queue, sleeping, debug, controller_mapping, thunder_borg):
         """
 
         :param queue: the queue for piping events to the main process
@@ -399,9 +403,15 @@ class RemoteControl:
                             if state in calc_props[1]:
                                 queue.put(["on_stick_left_north", code, RemoteControl.percent_value(calc_props)])
 
+                                if thunder_borg is not None:
+                                    thunder_borg.setMotor1(RemoteControl.percent_value(calc_props))
+
                             # MOVEMENT SOUTH
                             if state in calc_props[2]:
                                 queue.put(["on_stick_left_south", code, RemoteControl.percent_value(calc_props)])
+
+                                if thunder_borg is not None:
+                                    thunder_borg.setMotor1(RemoteControl.percent_value(calc_props))
 
                     # RIGHT STICK
                     if code in controller_mapping.STICK_RIGHT_X or code in controller_mapping.STICK_RIGHT_Y:
@@ -433,9 +443,15 @@ class RemoteControl:
                             if state in calc_props[1]:
                                 queue.put(["on_stick_right_north", code, RemoteControl.percent_value(calc_props)])
 
+                                if thunder_borg is not None:
+                                    thunder_borg.setMotor2(RemoteControl.percent_value(calc_props))
+
                             # MOVEMENT SOUTH
                             if state in calc_props[2]:
                                 queue.put(["on_stick_right_south", code, RemoteControl.percent_value(calc_props)])
+
+                                if thunder_borg is not None:
+                                    thunder_borg.setMotor2(RemoteControl.percent_value(calc_props))
                 else:
                     if code in controller_mapping.WAKE_UP:
                         is_sleeping = False
