@@ -25,7 +25,8 @@ def any(code, state):
 
 
 def print_val(state):
-    print "> {0}".format(state)
+    if state != 0:
+        print "> {0}".format(state)
 
 
 if __name__ == "__main__":
@@ -35,7 +36,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    remote = RemoteControl(profile=args.profile, start_sleeping=args.sleeping, debug_level=DebugLevel.NONE)
+    remote = RemoteControl(profile=args.profile, start_sleeping=args.sleeping, debug_level=DebugLevel.NONE, in_proc=False)
     if remote.is_available:
         remote.events.wake_up += lambda: wake_up(remote)
         remote.events.on_west += lambda code, state: sleep(remote)
@@ -49,5 +50,6 @@ if __name__ == "__main__":
 
     while remote.remote_online:
         remote.listen()
+
         if remote.is_available:
             pass
