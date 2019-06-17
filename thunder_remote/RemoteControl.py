@@ -146,7 +146,7 @@ class RemoteControl:
                     else:
                         event.__call__()
 
-    def control_blocking(self):
+    def active_control(self):
         """
 
         """
@@ -269,12 +269,11 @@ class RemoteControl:
 
             for event in events:
                 code = event.code
+                state = event.state
 
-                if code in controller_mapping.WAKE_UP:
+                if code in controller_mapping.WAKE_UP and state == 1:
                     queue.put(['alarm'])
-                    pass
-
-            del events
+                    break
 
     @classmethod
     def plain_control(cls, sleeping, debug_mode, controller_mapping):
@@ -307,7 +306,7 @@ class RemoteControl:
                     is_running = cmd[1]
 
             if not is_running or is_sleeping:
-                continue
+                return
 
             events = get_gamepad()
             for event in events:
@@ -529,4 +528,4 @@ class RemoteControl:
                         is_sleeping = False
                         RemoteControl.events.wake_up() if plain else queue.put(['wake_up'])
 
-        events = None
+            events = None

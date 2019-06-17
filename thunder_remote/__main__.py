@@ -58,7 +58,7 @@ if __name__ == "__main__":
         remote.listen()
 
         if mc:
-            remote.control_blocking()
+            remote.active_control()
 
         if remote.is_available:
             pass
