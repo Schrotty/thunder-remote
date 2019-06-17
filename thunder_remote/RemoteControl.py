@@ -9,7 +9,6 @@ from thunder_remote.DebugLevel import DebugLevel
 
 
 class RemoteControl:
-
     event_queue = Queue()
     control_queue = Queue()
     events = RemoteControlEvents()
@@ -65,10 +64,11 @@ class RemoteControl:
             print "> Remote control is now ready for activation!"
             self.proc = Process(group=None, target=RemoteControl.control, name="thunder_remote",
                                 args=(RemoteControl.event_queue, RemoteControl.control_queue, start_sleeping,
-                                      debug_level, self.controller_mapping))
+                                      debug_level, self.controller_mapping, False))
 
-            self.clock = Process(group=None, target=RemoteControl.alarm_clock, name="thunder-remote-clock",
-                                 args=(RemoteControl.control_queue, self.controller_mapping))
+            if not in_proc:
+                self.clock = Process(group=None, target=RemoteControl.alarm_clock, name="thunder-remote-clock",
+                                     args=(RemoteControl.event_queue, self.controller_mapping))
 
     def activate(self):
         """
@@ -84,9 +84,8 @@ class RemoteControl:
             print "> Remote control activated!"
             if self.in_proc:
                 self.proc.start()
-                self.clock.start()
-            else:
-                RemoteControl.plain_control(self.is_sleeping, self.debug_level, self.controller_mapping)
+
+            self.clock.start()
 
     def deactivate(self):
         """
@@ -106,13 +105,16 @@ class RemoteControl:
             if self.debug_level == DebugLevel.BASIC:
                 print "> [DEBUG] WAKE_UP"
 
+            if not self.in_proc:
+                self.control_blocking()
+
     def sleep(self):
         """
 
         """
         if not self.is_sleeping:
             self.is_sleeping = True
-            RemoteControl.control_queue.put(["sleep", self.is_sleeping])
+            RemoteControl.control_queue.put(["sleep", True])
 
             if self.debug_level == DebugLevel.BASIC:
                 print "> [DEBUG] SLEEP"
@@ -126,6 +128,10 @@ class RemoteControl:
 
             code, state = None, None
             method = action[0]
+
+            if method == "alarm":
+                RemoteControl.events.wake_up()
+
             if len(action) == 3:
                 code = action[1]
                 state = action[2]
@@ -139,6 +145,12 @@ class RemoteControl:
                         event.__call__(code, state)
                     else:
                         event.__call__()
+
+    def control_blocking(self):
+        """
+
+        """
+        RemoteControl.plain_control(self.is_sleeping, self.debug_level, self.controller_mapping)
 
     def load_profile(self):
         """
@@ -251,16 +263,18 @@ class RemoteControl:
         return (state - float(values[0])) / (values[values.__len__() - 1] - values[0]) * mod
 
     @classmethod
-    def alarm_clock(cls, c_queue, controller_mapping):
-        events = get_gamepad()
+    def alarm_clock(cls, queue, controller_mapping):
+        while True:
+            events = get_gamepad()
 
-        for event in events:
-            code = event.code
-            state = event.state
+            for event in events:
+                code = event.code
 
-            if code in controller_mapping.WAKE_UP:
-                is_sleeping = False
-                c_queue.put(['wake_up'])
+                if code in controller_mapping.WAKE_UP:
+                    queue.put(['alarm'])
+                    pass
+
+            del events
 
     @classmethod
     def plain_control(cls, sleeping, debug_mode, controller_mapping):
@@ -287,9 +301,13 @@ class RemoteControl:
                 cmd = c_queue.get()
                 if cmd[0] == "sleep":
                     is_sleeping = cmd[1]
+                    is_running = False if plain else is_running
 
                 if cmd[0] == "run":
                     is_running = cmd[1]
+
+            if not is_running or is_sleeping:
+                continue
 
             events = get_gamepad()
             for event in events:
@@ -306,23 +324,27 @@ class RemoteControl:
 
                         # RIGHT BUTTONS
                         if code in controller_mapping.BTN_NORTH:
-                            RemoteControl.events.on_north(code, state) if plain else queue.put(["on_north", code, state])
+                            RemoteControl.events.on_north(code, state) if plain else queue.put(
+                                ["on_north", code, state])
 
                         if code in controller_mapping.BTN_EAST:
                             RemoteControl.events.on_east(code, state) if plain else queue.put(["on_east", code, state])
 
                         if code in controller_mapping.BTN_SOUTH:
-                            RemoteControl.events.on_south(code, state) if plain else queue.put(["on_south", code, state])
+                            RemoteControl.events.on_south(code, state) if plain else queue.put(
+                                ["on_south", code, state])
 
                         if code in controller_mapping.BTN_WEST:
                             RemoteControl.events.on_west(code, state) if plain else queue.put(["on_west", code, state])
 
                         # START AND SELECT
                         if code in controller_mapping.START:
-                            RemoteControl.events.on_start(code, state) if plain else queue.put(["on_start", code, state])
+                            RemoteControl.events.on_start(code, state) if plain else queue.put(
+                                ["on_start", code, state])
 
                         if code in controller_mapping.SELECT:
-                            RemoteControl.events.on_select(code, state) if plain else queue.put(["on_select", code, state])
+                            RemoteControl.events.on_select(code, state) if plain else queue.put(
+                                ["on_select", code, state])
 
                     # CONTROLLER CROSS
                     if code in controller_mapping.CROSS_Y or code in controller_mapping.CROSS_X:
@@ -330,45 +352,55 @@ class RemoteControl:
                         # CROSS NORTH AND SOUTH
                         if code in controller_mapping.CROSS_Y:
                             if state == -1:
-                                RemoteControl.events.on_cross_north_p(code, state) if plain else queue.put(["on_cross_north_p", code, state])
+                                RemoteControl.events.on_cross_north_p(code, state) if plain else queue.put(
+                                    ["on_cross_north_p", code, state])
                                 prev_cross_state = -1
 
                             if state == 1:
-                                RemoteControl.events.on_cross_south_p(code, state) if plain else queue.put(["on_cross_south_p", code, state])
+                                RemoteControl.events.on_cross_south_p(code, state) if plain else queue.put(
+                                    ["on_cross_south_p", code, state])
                                 prev_cross_state = 1
 
                             if state == 0:
                                 if prev_cross_state == 1:
-                                    RemoteControl.events.on_cross_south_r(code, state) if plain else queue.put(["on_cross_south_r", code, state])
+                                    RemoteControl.events.on_cross_south_r(code, state) if plain else queue.put(
+                                        ["on_cross_south_r", code, state])
                                 else:
-                                    RemoteControl.events.on_cross_north_r(code, state) if plain else queue.put(["on_cross_north_r", code, state])
+                                    RemoteControl.events.on_cross_north_r(code, state) if plain else queue.put(
+                                        ["on_cross_north_r", code, state])
 
                         # CROSS WEST AND EAST
                         if code in controller_mapping.CROSS_X:
                             if state == -1:
-                                RemoteControl.events.on_cross_west_p(code, state) if plain else queue.put(["on_cross_west_p", code, state])
+                                RemoteControl.events.on_cross_west_p(code, state) if plain else queue.put(
+                                    ["on_cross_west_p", code, state])
                                 prev_cross_state = -1
 
                             if state == 1:
-                                RemoteControl.events.on_cross_east_p(code, state) if plain else queue.put(["on_cross_east_p", code, state])
+                                RemoteControl.events.on_cross_east_p(code, state) if plain else queue.put(
+                                    ["on_cross_east_p", code, state])
                                 prev_cross_state = 1
 
                             if state == 0:
                                 if prev_cross_state == 1:
-                                    RemoteControl.events.on_cross_east_r(code, state) if plain else queue.put(["on_cross_east_r", code, state])
+                                    RemoteControl.events.on_cross_east_r(code, state) if plain else queue.put(
+                                        ["on_cross_east_r", code, state])
                                 else:
-                                    RemoteControl.events.on_cross_west_r(code, state) if plain else queue.put(["on_cross_west_r", code, state])
+                                    RemoteControl.events.on_cross_west_r(code, state) if plain else queue.put(
+                                        ["on_cross_west_r", code, state])
 
                     # TRIGGERS
                     if code in controller_mapping.TRIGGER_L or code in controller_mapping.TRIGGER_R:
 
                         # LEFT TRIGGER
                         if code in controller_mapping.TRIGGER_L:
-                            RemoteControl.events.on_trigger_left(code, state) if plain else queue.put(["on_trigger_left", code, state])
+                            RemoteControl.events.on_trigger_left(code, state) if plain else queue.put(
+                                ["on_trigger_left", code, state])
 
                         # RIGHT TRIGGER
                         if code in controller_mapping.TRIGGER_R:
-                            RemoteControl.events.on_trigger_right(code, state) if plain else queue.put(["on_trigger_right", code, state])
+                            RemoteControl.events.on_trigger_right(code, state) if plain else queue.put(
+                                ["on_trigger_right", code, state])
 
                     # SHOULDERS
                     if code in controller_mapping.SHOULDR_L or code in controller_mapping.SHOULDR_R:
@@ -378,42 +410,54 @@ class RemoteControl:
 
                             # ON RELEASE
                             if state == 0:
-                                RemoteControl.events.on_shoulder_left_r(code, state) if plain else queue.put(["on_shoulder_left_r", code, state])
+                                RemoteControl.events.on_shoulder_left_r(code, state) if plain else queue.put(
+                                    ["on_shoulder_left_r", code, state])
 
                             # WHEN PRESSED
                             if state == 1:
-                                RemoteControl.events.on_shoulder_left_p(code, state) if plain else queue.put(["on_shoulder_left_p", code, state])
+                                RemoteControl.events.on_shoulder_left_p(code, state) if plain else queue.put(
+                                    ["on_shoulder_left_p", code, state])
 
                         # RIGHT SHOULDER
                         if code in controller_mapping.SHOULDR_R:
 
                             # ON RELEASE
                             if state == 0:
-                                RemoteControl.events.on_shoulder_right_r(code, state) if plain else queue.put(["on_shoulder_right_r", code, state])
+                                RemoteControl.events.on_shoulder_right_r(code, state) if plain else queue.put(
+                                    ["on_shoulder_right_r", code, state])
 
                             # WHEN PRESSED
                             if state == 1:
-                                RemoteControl.events.on_shoulder_right_p(code, state) if plain else queue.put(["on_shoulder_right_p", code, state])
+                                RemoteControl.events.on_shoulder_right_p(code, state) if plain else queue.put(
+                                    ["on_shoulder_right_p", code, state])
 
                     # LEFT STICK
                     if code in controller_mapping.STICK_LEFT_X or code in controller_mapping.STICK_LEFT_Y:
 
                         # ANY MOVEMENT
-                        RemoteControl.events.on_stick_left(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_left", code, RemoteControl.percent_value(calc_props)])
+                        RemoteControl.events.on_stick_left(code, RemoteControl.percent_value(
+                            calc_props)) if plain else queue.put(
+                            ["on_stick_left", code, RemoteControl.percent_value(calc_props)])
 
                         # X-AXIS
                         if code in controller_mapping.STICK_LEFT_X:
 
                             # ANY X-AXIS MOVEMENT
-                            RemoteControl.events.on_stick_left_x(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_left_x", code, RemoteControl.percent_value(calc_props)])
+                            RemoteControl.events.on_stick_left_x(code, RemoteControl.percent_value(
+                                calc_props)) if plain else queue.put(
+                                ["on_stick_left_x", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT EAST
                             if state in calc_props[1]:
-                                RemoteControl.events.on_stick_left_east(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_left_east", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_left_east(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_left_east", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT WEST
                             if state in calc_props[2]:
-                                RemoteControl.events.on_stick_left_west(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_left_west", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_left_west(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_left_west", code, RemoteControl.percent_value(calc_props)])
 
                         # Y-AXIS
                         if code in controller_mapping.STICK_LEFT_Y:
@@ -423,46 +467,66 @@ class RemoteControl:
 
                             # MOVEMENT NORTH
                             if state in calc_props[1]:
-                                RemoteControl.events.on_stick_left_north(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_left_north", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_left_north(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_left_north", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT SOUTH
                             if state in calc_props[2]:
-                                RemoteControl.events.on_stick_left_south(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_left_south", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_left_south(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_left_south", code, RemoteControl.percent_value(calc_props)])
 
                     # RIGHT STICK
                     if code in controller_mapping.STICK_RIGHT_X or code in controller_mapping.STICK_RIGHT_Y:
 
                         # ANY MOVEMENT
-                        RemoteControl.events.on_stick_right(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_right", code, RemoteControl.percent_value(calc_props)])
+                        RemoteControl.events.on_stick_right(code, RemoteControl.percent_value(
+                            calc_props)) if plain else queue.put(
+                            ["on_stick_right", code, RemoteControl.percent_value(calc_props)])
 
                         # X-AXIS
                         if code in controller_mapping.STICK_RIGHT_X:
 
                             # ANY X-AXIS MOVEMENT
-                            RemoteControl.events.on_stick_right_x(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_right_x", code, RemoteControl.percent_value(calc_props)])
+                            RemoteControl.events.on_stick_right_x(code, RemoteControl.percent_value(
+                                calc_props)) if plain else queue.put(
+                                ["on_stick_right_x", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT EAST
                             if state in calc_props[1]:
-                                RemoteControl.events.on_stick_right_east(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_right_east", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_right_east(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_right_east", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT WEST
                             if state in calc_props[2]:
-                                RemoteControl.events.on_stick_right_west(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_right_west", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_right_west(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_right_west", code, RemoteControl.percent_value(calc_props)])
 
                         # Y-AXIS
                         if code in controller_mapping.STICK_RIGHT_Y:
 
                             # ANY Y-AXIS MOVEMENT
-                            RemoteControl.events.on_stick_right_y(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_right_y", code, RemoteControl.percent_value(calc_props)])
+                            RemoteControl.events.on_stick_right_y(code, RemoteControl.percent_value(
+                                calc_props)) if plain else queue.put(
+                                ["on_stick_right_y", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT NORTH
                             if state in calc_props[1]:
-                                RemoteControl.events.on_stick_right_north(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_right_north", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_right_north(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_right_north", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT SOUTH
                             if state in calc_props[2]:
-                                RemoteControl.events.on_stick_right_south(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_right_south", code, RemoteControl.percent_value(calc_props)])
+                                RemoteControl.events.on_stick_right_south(code, RemoteControl.percent_value(
+                                    calc_props)) if plain else queue.put(
+                                    ["on_stick_right_south", code, RemoteControl.percent_value(calc_props)])
                 else:
-                    if code in controller_mapping.WAKE_UP:
+                    if (code in controller_mapping.WAKE_UP) and not plain:
                         is_sleeping = False
                         RemoteControl.events.wake_up() if plain else queue.put(['wake_up'])
+
+        events = None
