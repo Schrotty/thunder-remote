@@ -16,7 +16,7 @@ class UpdateLibrary(build_py):
 
         try:
             print("> START PATCHING!")
-            copyfile('thunder_remote/lib/inputs.py', imp.find_module('inputs')[1])
+            copyfile('thunder_remote/patch/inputs.py', imp.find_module('inputs')[1])
             print("> PATCHING SUCCESSFUL!")
         except IOError:
             print("> PATCHING FAILED!")
