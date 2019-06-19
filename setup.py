@@ -15,11 +15,11 @@ class UpdateLibrary(build_py):
     def run(self):
 
         try:
-            print "> START PATCHING!"
+            print("> START PATCHING!")
             copyfile('thunder_remote/lib/inputs.py', imp.find_module('inputs')[1])
-            print "> PATCHING SUCCESSFUL!"
+            print("> PATCHING SUCCESSFUL!")
         except IOError:
-            print "> PATCHING FAILED!"
+            print("> PATCHING FAILED!")
 
         build_py.run(self)
 
@@ -30,7 +30,7 @@ setuptools.setup(
     },
 
     name="thunder-remote",
-    version="0.5.2",
+    version="0.5.3",
     author="Schrotty",
     author_email="rubenmaurer@live.de",
     description="A modified version of the 'pyController' package for usage with a ThunderBorg",
