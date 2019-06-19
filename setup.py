@@ -30,7 +30,7 @@ setuptools.setup(
     },
 
     name="thunder-remote",
-    version="0.5.3",
+    version="0.6.0",
     author="Schrotty",
     author_email="rubenmaurer@live.de",
     description="A modified version of the 'pyController' package for usage with a ThunderBorg",
