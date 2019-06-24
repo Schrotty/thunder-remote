@@ -15,5 +15,5 @@ Or clone this repo:
 ## Usage
 For examples see the _examples/_ directory.
 
-## Credits
-Inputs is by Zeth and is licensed under the BSD-3-Clause license
+# License'
+MIT
