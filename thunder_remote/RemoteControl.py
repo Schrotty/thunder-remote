@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 import csv
 
@@ -41,27 +43,26 @@ class RemoteControl:
         self.in_proc = in_proc
         self.clock = None
 
-        print "> INIT REMOTE CONTROL"
-        print "> Looking for gamepad..."
+        print("> INIT THUNDER-REMOTE")
         if not devices.gamepads:
             self.remote_found = False
-            print "> No gamepad detected!"
+            print("> No gamepad detected!")
         else:
-            print "> Gamepad detected!"
+            print("> Gamepad detected!")
 
-        print ">"
-        print "> Loading profile '" + self.profile + "'"
+        print(">")
+        print("> Loading profile '" + self.profile + "'")
 
         self.controller_mapping = self.load_profile()
         if not self.profile_loaded:
-            print "> Unable to load a profile!"
+            print("> Unable to load a profile!")
         else:
-            print "> Profile for '" + self.controller_name + "' loaded!"
+            print("> Profile for '" + self.controller_name + "' loaded!")
 
-        print ">"
+        print(">")
 
         if self.remote_found and self.profile_loaded:
-            print "> Remote control is now ready for activation!"
+            print("> Remote control is now ready for activation!")
             self.proc = Process(group=None, target=RemoteControl.control, name="thunder_remote",
                                 args=(RemoteControl.event_queue, RemoteControl.control_queue, start_sleeping,
                                       debug_level, self.controller_mapping, False))
@@ -75,13 +76,13 @@ class RemoteControl:
 
         """
         if self.remote_online:
-            print "> Remote control already activated!"
+            print("> Remote control already activated!")
         else:
             self.remote_online = True
             if self.start_sleeping:
                 self.sleep()
 
-            print "> Remote control activated!"
+            print("> Remote control activated!")
             if self.in_proc:
                 self.proc.start()
 
@@ -93,7 +94,7 @@ class RemoteControl:
         """
         self.remote_online = False
         RemoteControl.control_queue.put(["run", self.remote_online])
-        print "> Remote control deactivated!"
+        print("> Remote control deactivated!")
 
     def wake(self):
         """
@@ -103,7 +104,7 @@ class RemoteControl:
             self.is_sleeping = False
 
             if self.debug_level == DebugLevel.BASIC:
-                print "> [DEBUG] WAKE_UP"
+                print("> [DEBUG] WAKE_UP")
 
     def sleep(self):
         """
@@ -114,7 +115,7 @@ class RemoteControl:
             RemoteControl.control_queue.put(["sleep", True])
 
             if self.debug_level == DebugLevel.BASIC:
-                print "> [DEBUG] SLEEP"
+                print("> [DEBUG] SLEEP")
 
     def listen(self):
         """
@@ -137,7 +138,7 @@ class RemoteControl:
                 if event.__name__ == method:
                     if code is not None and state is not None:
                         if self.debug_level == DebugLevel.QUEUE:
-                            print "> [DEBUG] QUEUE-OUT: {0} {1}".format(code, state)
+                            print("> [DEBUG] QUEUE-OUT: {0} {1}".format(code, state))
 
                         event.__call__(code, state)
                     else:
@@ -159,13 +160,13 @@ class RemoteControl:
         try:
             path = self.profiles_path + '/' + self.profile + '.csv'
             if self.debug_level == DebugLevel.BASIC:
-                print ">", path
+                print(">", path)
 
             if self.profiles_path is 'profiles':
                 path = os.path.dirname(os.path.realpath(__file__)) + '/' + path
 
             if not os.path.isfile(path):
-                print "> Profile '" + self.profile + "' not found!"
+                print("> Profile '" + self.profile + "' not found!")
                 return None
 
             self.tries_loading_profile += 1
@@ -224,7 +225,7 @@ class RemoteControl:
                 self.profile_loaded = True
 
         except (KeyError, IOError):
-            print "> Invalid profile! Switching back to default!"
+            print("> Invalid profile! Switching back to default!")
             self.profile = "default"
             if self.tries_loading_profile == 1:
                 self.load_profile()
@@ -280,6 +281,7 @@ class RemoteControl:
     def control(cls, queue, c_queue, sleeping, debug, controller_mapping, plain=True):
         """
 
+        :param plain: running in main process or in a process of its own
         :param queue: the queue for piping events to the main process
         :param c_queue: the queue for receiving commands
         :param sleeping: start controller sleeping
@@ -463,7 +465,9 @@ class RemoteControl:
                         if code in controller_mapping.STICK_LEFT_Y:
 
                             # ANY Y-AXIS MOVEMENT
-                            RemoteControl.events.on_stick_left_y(code, RemoteControl.percent_value(calc_props)) if plain else queue.put(["on_stick_left_y", code, RemoteControl.percent_value(calc_props)])
+                            RemoteControl.events.on_stick_left_y(code, RemoteControl.percent_value(
+                                calc_props)) if plain else queue.put(
+                                ["on_stick_left_y", code, RemoteControl.percent_value(calc_props)])
 
                             # MOVEMENT NORTH
                             if state in calc_props[1]:

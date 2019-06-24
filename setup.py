@@ -1,36 +1,27 @@
-from shutil import copyfile
-
 import setuptools
-import imp
-from setuptools.command.build_py import build_py
+from setuptools.command.install import install
+
+from setup.PatchLibrary import PatchLibrary
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
-class UpdateLibrary(build_py):
-    """
-    Update 'inputs.py' for non-blocking gamepad access
-    """
+class CustomInstallCommand(install):
     def run(self):
+        install.run(self)
 
-        try:
-            print("> START PATCHING!")
-            copyfile('thunder_remote/patch/inputs.py', imp.find_module('inputs')[1])
-            print("> PATCHING SUCCESSFUL!")
-        except IOError:
-            print("> PATCHING FAILED!")
-
-        build_py.run(self)
+        self.run_command('patch')
 
 
 setuptools.setup(
     cmdclass={
-        'patch': UpdateLibrary
+        'patch': PatchLibrary,
+        'install': CustomInstallCommand
     },
 
     name="thunder-remote",
-    version="0.6.0",
+    version="0.6.1",
     author="Schrotty",
     author_email="rubenmaurer@live.de",
     description="A modified version of the 'pyController' package for usage with a ThunderBorg",
@@ -47,7 +38,7 @@ setuptools.setup(
     license="MIT",
     include_package_data=True,
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Programming Language :: Python :: 2.7",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",

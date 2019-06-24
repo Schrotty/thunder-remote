@@ -6,4 +6,3 @@ class DebugLevel(Enum):
     BASIC = 1
     QUEUE = 2
     EVENT = 3
-
