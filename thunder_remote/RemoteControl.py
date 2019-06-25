@@ -4,6 +4,8 @@ import os
 import csv
 
 from multiprocessing import Process, Queue
+from threading import Thread
+
 from inputs import devices, get_gamepad, NoDataError
 from RemoteControlEvents import RemoteControlEvents
 from thunder_remote.ControllerMapping import ControllerMapping
@@ -14,10 +16,9 @@ class RemoteControl:
     event_queue = Queue()
     control_queue = Queue()
     events = RemoteControlEvents()
+    is_sleeping = False
 
-    # TODO: adjust process commands
-    # TODO: there is an issue with the 'start_sleeping' parameter
-    # TODO: write documentation and example implementation
+    # TODO: write documentation
     def __init__(self, in_proc=False, profile="default", debug_level=DebugLevel.NONE, profiles_path='profiles',
                  start_sleeping=False):
         """
@@ -27,6 +28,7 @@ class RemoteControl:
         :param profiles_path: alternate path to the profile
         :param start_sleeping: start controller sleeping
         """
+
         self.debug_level = debug_level
         self.is_sleeping = start_sleeping
 
@@ -42,6 +44,8 @@ class RemoteControl:
         self.alarm = None
         self.in_proc = in_proc
         self.clock = None
+
+        RemoteControl.is_sleeping = self.is_sleeping
 
         print("> INIT THUNDER-REMOTE")
         if not devices.gamepads:
@@ -68,13 +72,14 @@ class RemoteControl:
                                       debug_level, self.controller_mapping, False))
 
             if not in_proc:
-                self.clock = Process(group=None, target=RemoteControl.alarm_clock, name="thunder-remote-clock",
-                                     args=(RemoteControl.event_queue, self.controller_mapping))
+                self.clock = Thread(group=None, target=RemoteControl.alarm_clock, name="thunder-remote-clock",
+                                    args=(RemoteControl.event_queue, self.controller_mapping))
 
     def activate(self):
         """
 
         """
+
         if self.remote_online:
             print("> Remote control already activated!")
         else:
@@ -92,16 +97,19 @@ class RemoteControl:
         """
 
         """
+
         self.remote_online = False
-        RemoteControl.control_queue.put(["run", self.remote_online])
+        RemoteControl.control_queue.put(["deactivate"])
         print("> Remote control deactivated!")
 
     def wake(self):
         """
 
         """
+
         if self.is_sleeping:
             self.is_sleeping = False
+            RemoteControl.is_sleeping = False
 
             if self.debug_level == DebugLevel.BASIC:
                 print("> [DEBUG] WAKE_UP")
@@ -110,9 +118,12 @@ class RemoteControl:
         """
 
         """
+
         if not self.is_sleeping:
             self.is_sleeping = True
-            RemoteControl.control_queue.put(["sleep", True])
+            RemoteControl.is_sleeping = True
+
+            RemoteControl.control_queue.put(["sleep"])
 
             if self.debug_level == DebugLevel.BASIC:
                 print("> [DEBUG] SLEEP")
@@ -121,6 +132,7 @@ class RemoteControl:
         """
 
         """
+
         if not RemoteControl.event_queue.empty():
             action = RemoteControl.event_queue.get()
 
@@ -148,6 +160,7 @@ class RemoteControl:
         """
 
         """
+
         RemoteControl.plain_control(self.is_sleeping, self.debug_level, self.controller_mapping)
 
     def load_profile(self):
@@ -155,6 +168,7 @@ class RemoteControl:
 
         :return: the current controller mapping
         """
+
         controller_mapping = ControllerMapping()
 
         try:
@@ -240,6 +254,7 @@ class RemoteControl:
 
         :return: is a remote control available
         """
+
         return self.remote_found
 
     @classmethod
@@ -248,6 +263,7 @@ class RemoteControl:
 
         :return: the normalized state
         """
+
         mod = 1
         values = common
 
@@ -262,19 +278,34 @@ class RemoteControl:
 
     @classmethod
     def alarm_clock(cls, queue, controller_mapping):
+        """
+
+        :param queue:
+        :param controller_mapping:
+        """
         while True:
-            events = get_gamepad()
+            try:
+                events = get_gamepad()
 
-            for event in events:
-                code = event.code
-                state = event.state
+                for event in events:
+                    code = event.code
+                    state = event.state
 
-                if code in controller_mapping.WAKE_UP and state == 1:
-                    queue.put(['alarm'])
-                    break
+                    if code in controller_mapping.WAKE_UP and state == 1 and RemoteControl.is_sleeping:
+                        queue.put(['alarm'])
+                        break
+            except NoDataError:
+                pass
 
     @classmethod
     def plain_control(cls, sleeping, debug_mode, controller_mapping):
+        """
+
+        :param sleeping:
+        :param debug_mode:
+        :param controller_mapping:
+        """
+
         RemoteControl.control(None, RemoteControl.control_queue, sleeping, debug_mode, controller_mapping)
 
     @classmethod
@@ -288,6 +319,7 @@ class RemoteControl:
         :param debug: the debug level
         :param controller_mapping: the current controller mapping
         """
+
         is_running = True
         is_sleeping = sleeping
         debug_level = debug
@@ -298,11 +330,11 @@ class RemoteControl:
             if not c_queue.empty():
                 cmd = c_queue.get()
                 if cmd[0] == "sleep":
-                    is_sleeping = cmd[1]
+                    is_sleeping = True
                     is_running = False if plain else is_running
 
-                if cmd[0] == "run":
-                    is_running = cmd[1]
+                if cmd[0] == "deactivate":
+                    is_running = False
 
             if not is_running or is_sleeping:
                 return

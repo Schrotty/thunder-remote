@@ -15,5 +15,5 @@ Or clone this repo:
 ## Usage
 For examples see the _examples/_ directory.
 
-# License'
+# License
 MIT
