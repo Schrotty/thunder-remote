@@ -1,2 +1,6 @@
 include thunder_remote/profiles/default.csv
 include thunder_remote/profiles/madness.csv
+include setup/PatchLibrary.py
+include LICENSE.md
+include LICENSE-3RD-PARTY.md
+include README.md

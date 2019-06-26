@@ -19,8 +19,12 @@ class PatchLibrary(Command):
         pass
 
     def run(self):
+        PatchLibrary.start()
+
+    @staticmethod
+    def start():
         patch = 'thunder_remote/patch/inputs.py'
         path = imp.find_module('inputs')[1]
 
-        print("copying {0} -> {0}".format(patch, path))
+        print("copying {0} -> {1}".format(patch, path))
         copyfile(patch, path)

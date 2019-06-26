@@ -1,10 +1,15 @@
-# Thunder Remote
-A simple remote control for a thunder borg based on the [pyController](https://github.com/Schrotty/pyController) package.
+# Thunder-Remote
 
-## Installation
-Using pip:
+## Install
+
+Install through pypi:
 
     pip install thunder-remote
+    
+After the setup is complete run the following command to patch the inputs library for non-blocking controller input.
+Otherwise the library blocks until there is an input from the controller.
+
+    python -m thunder_remote --patch
 
 Or clone this repo:
 
@@ -13,7 +18,10 @@ Or clone this repo:
     python setup.py install
 
 ## Usage
+
 For examples see the _examples/_ directory.
 
-# License
-MIT
+## License
+Thunder-Remote is licensed under the MIT-License.
+
+The 3rd-party module licenses can be found in _LICENSE-3RD-PARTY.md_
